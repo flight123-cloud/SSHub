@@ -12,7 +12,13 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # 两种 macOS 运行器都会构建 arm64 + x64 安装包；任一成功即可下载
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -41,9 +47,9 @@ jobs:
           done
           ls -lh dist/*.dmg dist/*.zip
 
-      - name: Smoke test (launch arm64 app)
+      - name: Smoke test (launch app for this machine's arch)
         run: |
-          APP=$(ls -d dist/mac-arm64/SSHub.app)
+          if [ "$(uname -m)" = "arm64" ]; then APP=dist/mac-arm64/SSHub.app; else APP=dist/mac/SSHub.app; fi
           "$APP/Contents/MacOS/SSHub" > launch.log 2>&1 &
           PID=$!
           sleep 15
@@ -56,14 +62,14 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SSHub-macOS
+          name: SSHub-macOS-built-on-${{ matrix.runner }}
           path: |
             dist/*.dmg
             dist/*.zip
           if-no-files-found: error
 
       - name: Publish release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.runner == 'macos-latest'
         uses: softprops/action-gh-release@v2
         with:
           files: |
