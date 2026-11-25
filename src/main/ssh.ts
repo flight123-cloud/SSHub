@@ -1,4 +1,4 @@
-import { dialog } from 'electron'
+import { BrowserWindow, dialog, type WebContents } from 'electron'
 import { Client, type ClientChannel, type ConnectConfig } from 'ssh2'
 import { createHash } from 'crypto'
 import fs from 'fs'
@@ -9,7 +9,7 @@ import { encode, streamDecoder } from './encoding'
 import { knownHosts, sessionStore } from './store'
 import { friendlyError } from './errors'
 import { SftpFs } from './sftpfs'
-import { getMainWindow, markClosed, register, send, get } from './connections'
+import { markClosed, register, sendTo, get } from './connections'
 
 /** 每个 SSH 连接的交互式 Shell 及其字符编码 */
 const shells = new Map<string, { ch: ClientChannel; enc: Encoding }>()
@@ -33,12 +33,12 @@ function expandHome(p: string): string {
 }
 
 /** 主机指纹校验：首次连接询问，变更时警告 */
-function makeHostVerifier(hostPort: string) {
+function makeHostVerifier(hostPort: string, owner: WebContents) {
   return (key: Buffer, verify: (ok: boolean) => void): void => {
     const fp = 'SHA256:' + createHash('sha256').update(key).digest('base64').replace(/=+$/, '')
     const known = knownHosts.get(hostPort)
     if (known === fp) return verify(true)
-    const win = getMainWindow() ?? undefined
+    const win = BrowserWindow.fromWebContents(owner) ?? undefined
     const changed = !!known
     const opts: Electron.MessageBoxOptions = changed
       ? {
@@ -70,7 +70,8 @@ function makeHostVerifier(hostPort: string) {
 }
 
 async function buildConfig(
-  req: ConnectRequest
+  req: ConnectRequest,
+  owner: WebContents
 ): Promise<{ cfg: ConnectConfig; title: string; password?: string; encoding: Encoding }> {
   if (req.sessionId) {
     const s = await sessionStore.getSecret(req.sessionId)
@@ -85,7 +86,7 @@ async function buildConfig(
       keepaliveInterval: 30000,
       keepaliveCountMax: 4,
       tryKeyboard: true,
-      hostVerifier: makeHostVerifier(`${s.host}:${s.port}`)
+      hostVerifier: makeHostVerifier(`${s.host}:${s.port}`, owner)
     }
     if (s.authType === 'password') {
       cfg.password = password
@@ -120,7 +121,7 @@ async function buildConfig(
       keepaliveInterval: 30000,
       keepaliveCountMax: 4,
       tryKeyboard: true,
-      hostVerifier: makeHostVerifier(`${q.host}:${q.port || 22}`)
+      hostVerifier: makeHostVerifier(`${q.host}:${q.port || 22}`, owner)
     }
     // 快速连接且未填密码时，尝试系统 SSH Agent 与默认私钥
     if (!q.password) {
@@ -133,8 +134,8 @@ async function buildConfig(
   throw new Error('缺少连接参数')
 }
 
-export async function connect(req: ConnectRequest): Promise<ConnectResult> {
-  const { cfg, title, password, encoding } = await buildConfig(req)
+export async function connect(req: ConnectRequest, owner: WebContents): Promise<ConnectResult> {
+  const { cfg, title, password, encoding } = await buildConfig(req, owner)
   const client = new Client()
 
   client.on('keyboard-interactive', (_name, _instr, _lang, prompts, finish) => {
@@ -174,18 +175,19 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
     title,
     homeDir: '/',
     encoding,
+    owner,
     fs: sftpFs,
     xfer: new SftpFs(client),
     end: () => client.end()
   })
   const id = conn.id
 
-  client.on('error', (err) => send('ssh:error', id, friendlyError(err)))
+  client.on('error', (err) => sendTo(owner, 'ssh:error', id, friendlyError(err)))
   client.on('close', () => {
     shells.delete(id)
     const c = get(id)
     if (c) markClosed(c)
-    send('ssh:closed', id)
+    sendTo(owner, 'ssh:closed', id)
   })
 
   // 打开交互式 Shell
@@ -204,13 +206,13 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
   shells.set(id, { ch: shell, enc: encoding })
   if (encoding === 'utf8') {
     // UTF-8 直接传字节，xterm 自己解码
-    shell.on('data', (d: Buffer) => send('ssh:data', id, new Uint8Array(d)))
-    shell.stderr.on('data', (d: Buffer) => send('ssh:data', id, new Uint8Array(d)))
+    shell.on('data', (d: Buffer) => sendTo(owner, 'ssh:data', id, new Uint8Array(d)))
+    shell.stderr.on('data', (d: Buffer) => sendTo(owner, 'ssh:data', id, new Uint8Array(d)))
   } else {
     const out = streamDecoder(encoding)
     const err = streamDecoder(encoding)
-    shell.on('data', (d: Buffer) => send('ssh:data', id, out.write(d)))
-    shell.stderr.on('data', (d: Buffer) => send('ssh:data', id, err.write(d)))
+    shell.on('data', (d: Buffer) => sendTo(owner, 'ssh:data', id, out.write(d)))
+    shell.stderr.on('data', (d: Buffer) => sendTo(owner, 'ssh:data', id, err.write(d)))
   }
   shell.on('close', () => client.end())
 

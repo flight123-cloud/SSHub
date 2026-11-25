@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { AppSettings } from '../../../shared/types'
 import { Modal } from './Modal'
 import { THEMES, type TermTheme } from '../themes'
+import type { SessionInfo } from '../../../shared/types'
+import { formatAccelerator } from '../util'
 
-type Tab = 'appearance' | 'terminal' | 'behavior' | 'files'
+type Tab = 'appearance' | 'terminal' | 'behavior' | 'quick' | 'files'
 
 const FONT_PRESETS: [string, string][] = [
   ['SF Mono（系统默认）', '"SF Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace'],
@@ -60,6 +62,33 @@ function ThemeCard(props: { theme: TermTheme; selected: boolean; onClick: () => 
   )
 }
 
+/** 按下组合键录制为 Electron 快捷键格式 */
+function HotkeyInput(props: { value: string; onChange: (v: string) => void }) {
+  const [recording, setRecording] = useState(false)
+  return (
+    <input
+      className={'input hotkey-input' + (recording ? ' recording' : '')}
+      readOnly
+      value={recording ? '请按下组合键…' : formatAccelerator(props.value)}
+      onFocus={() => setRecording(true)}
+      onBlur={() => setRecording(false)}
+      onKeyDown={(e) => {
+        e.preventDefault()
+        if (e.key === 'Escape') return (e.target as HTMLInputElement).blur()
+        if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) return
+        const mods = [e.metaKey && 'Command', e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift'].filter(Boolean) as string[]
+        // 至少一个修饰键（F1-F12 除外），避免占用普通按键
+        if (!mods.length && !/^F\d{1,2}$/.test(e.key)) return
+        const codeKey = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : null
+        const named: Record<string, string> = { ' ': 'Space', Backquote: '`', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' }
+        const key = codeKey ?? named[e.code] ?? named[e.key] ?? (e.key.length === 1 ? e.key.toUpperCase() : e.key)
+        props.onChange([...mods, key].join('+'))
+        ;(e.target as HTMLInputElement).blur()
+      }}
+    />
+  )
+}
+
 export function SettingsDialog(props: {
   settings: AppSettings
   onChange: (patch: Partial<AppSettings>) => void
@@ -72,6 +101,16 @@ export function SettingsDialog(props: {
   const presetValue = FONT_PRESETS.find(([, v]) => v === s.fontFamily)?.[1] ?? 'custom'
   const [customMode, setCustomMode] = useState(presetValue === 'custom')
   const [customFont, setCustomFont] = useState(s.fontFamily)
+  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null)
+  useEffect(() => {
+    void window.api.sessions.list().then(setSessions)
+  }, [])
+  // 快捷键或开关变化后，询问主进程是否注册成功
+  useEffect(() => {
+    const t = setTimeout(() => void window.api.quick.hotkeyStatus().then(setHotkeyError).catch(() => undefined), 200)
+    return () => clearTimeout(t)
+  }, [s.quickTerminalEnabled, s.quickTerminalHotkey])
 
   return (
     <Modal
@@ -101,6 +140,9 @@ export function SettingsDialog(props: {
         <button className={tab === 'behavior' ? 'active' : ''} onClick={() => setTab('behavior')}>
           终端行为
         </button>
+        <button className={tab === 'quick' ? 'active' : ''} onClick={() => setTab('quick')}>
+          Quick Terminal
+        </button>
         <button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>
           连接与文件
         </button>
@@ -122,6 +164,22 @@ export function SettingsDialog(props: {
                 </button>
               ))}
             </div>
+          </Row>
+          <Row label="终端背景不透明度" hint="小于 100% 时可以透过终端看到后面的窗口或桌面">
+            <div className="row">
+              <input
+                type="range"
+                min={0.3}
+                max={1}
+                step={0.05}
+                value={s.backgroundOpacity}
+                onChange={(e) => set({ backgroundOpacity: Number(e.target.value) })}
+              />
+              <span className="set-value">{Math.round(s.backgroundOpacity * 100)}%</span>
+            </div>
+          </Row>
+          <Row label="毛玻璃背景" hint="macOS 原生的模糊效果，和「不透明度」配合使用（不透明度为 100% 时看不出效果）">
+            <Toggle checked={s.backgroundBlur} onChange={(v) => set({ backgroundBlur: v })} />
           </Row>
           <div className="theme-section">
             <div className="set-label">深色模式的终端配色</div>
@@ -232,6 +290,12 @@ export function SettingsDialog(props: {
               <option value="7">很高（WCAG AAA 标准）</option>
             </select>
           </Row>
+          <Row label="连字" hint="例如 => != -> 显示为一个符号。需要使用支持连字的字体，如 Fira Code、JetBrains Mono">
+            <Toggle checked={s.fontLigatures} onChange={(v) => set({ fontLigatures: v })} />
+          </Row>
+          <Row label="在终端中显示图片" hint="支持 Sixel 和 iTerm2 图片协议，例如 img2sixel、imgcat 等工具">
+            <Toggle checked={s.terminalImages} onChange={(v) => set({ terminalImages: v })} />
+          </Row>
           <Row label="回滚行数" hint="终端可以向上翻看的历史行数">
             <select className="input" value={String(s.scrollback)} onChange={(e) => set({ scrollback: Number(e.target.value) })}>
               {[1000, 5000, 10000, 50000, 100000].map((n) => (
@@ -301,6 +365,52 @@ export function SettingsDialog(props: {
           )}
           <Row label="响铃提醒" hint="服务器程序响铃（\a）时，在后台标签页上显示标记，窗口不在前台时发送通知">
             <Toggle checked={s.bellNotify} onChange={(v) => set({ bellNotify: v })} />
+          </Row>
+        </div>
+      )}
+
+      {tab === 'quick' && (
+        <div className="set-list">
+          <div className="set-intro">
+            在任何应用里按下全局快捷键，终端从屏幕顶部滑出；再按一次收起。适合临时登录常用服务器执行几条命令。
+          </div>
+          <Row label="启用 Quick Terminal">
+            <Toggle checked={s.quickTerminalEnabled} onChange={(v) => set({ quickTerminalEnabled: v })} />
+          </Row>
+          <Row label="全局快捷键" hint={hotkeyError ?? '点击输入框后按下组合键。注意不要与其他应用的快捷键冲突'}>
+            <HotkeyInput value={s.quickTerminalHotkey} onChange={(v) => set({ quickTerminalHotkey: v })} />
+          </Row>
+          {hotkeyError && <div className="form-error" style={{ padding: '0 2px 8px' }}>{hotkeyError}</div>}
+          <Row label="连接的会话" hint="也可以在 Quick Terminal 窗口顶部切换">
+            <select className="input" value={s.quickTerminalSessionId} onChange={(e) => set({ quickTerminalSessionId: e.target.value })}>
+              <option value="">每次呼出时选择</option>
+              {sessions
+                .filter((x) => x.protocol === 'ssh')
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}（{x.username}@{x.host}）
+                  </option>
+                ))}
+            </select>
+          </Row>
+          <Row label="窗口高度">
+            <div className="row">
+              <input
+                type="range"
+                min={20}
+                max={95}
+                step={5}
+                value={s.quickTerminalHeight}
+                onChange={(e) => set({ quickTerminalHeight: Number(e.target.value) })}
+              />
+              <span className="set-value">{s.quickTerminalHeight}%</span>
+            </div>
+          </Row>
+          <Row label="点击其他地方时自动收起">
+            <Toggle checked={s.quickTerminalAutoHide} onChange={(v) => set({ quickTerminalAutoHide: v })} />
+          </Row>
+          <Row label="试一下">
+            <button onClick={() => void window.api.quick.toggle()}>显示 Quick Terminal</button>
           </Row>
         </div>
       )}

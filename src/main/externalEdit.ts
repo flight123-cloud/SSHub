@@ -4,7 +4,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import type { ExternalEditEvent } from '../shared/types'
-import { get as getConn, onConnectionClosed, send } from './connections'
+import { get as getConn, onConnectionClosed, ownerOf, sendTo } from './connections'
 import { friendlyError } from './errors'
 
 /**
@@ -27,7 +27,7 @@ const watched = new Map<string, Watched>()
 const ROOT = (): string => path.join(os.tmpdir(), 'SSHub-edit')
 
 function emit(e: ExternalEditEvent): void {
-  send('edit:event', e)
+  sendTo(ownerOf(e.connId), 'edit:event', e)
 }
 
 function hashFile(p: string): string {

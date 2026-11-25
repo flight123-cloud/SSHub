@@ -100,3 +100,24 @@ export function isTextFile(name: string, size: number): boolean {
   const ext = lower.slice(dot + 1)
   return TEXT_EXT.has(ext) || /^(conf|log|txt|bak|old|orig|sample|dist|example)\.?\d*$/.test(ext)
 }
+
+/** Electron 快捷键格式 → macOS 符号，例如 "Control+Shift+`" → "⌃⇧`" */
+export function formatAccelerator(acc: string): string {
+  const map: Record<string, string> = {
+    commandorcontrol: '⌘',
+    cmdorctrl: '⌘',
+    command: '⌘',
+    cmd: '⌘',
+    control: '⌃',
+    ctrl: '⌃',
+    alt: '⌥',
+    option: '⌥',
+    shift: '⇧',
+    super: '⌘',
+    space: '空格'
+  }
+  return acc
+    .split('+')
+    .map((k) => map[k.toLowerCase()] ?? k)
+    .join('')
+}

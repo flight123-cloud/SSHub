@@ -87,6 +87,15 @@ const api = {
     pathForFile: (f: File) => webUtils.getPathForFile(f)
   },
 
+  quick: {
+    toggle: () => call<void>('quick:toggle'),
+    hide: () => call<void>('quick:hide'),
+    /** 重新注册全局快捷键，返回错误信息（null 表示成功） */
+    hotkeyStatus: () => call<string | null>('quick:hotkeyStatus'),
+    isQuick: () => call<boolean>('app:isQuick'),
+    onShown: (cb: () => void) => on('quick:shown', cb)
+  },
+
   settings: {
     get: () => call<AppSettings>('settings:get'),
     set: (patch: Partial<AppSettings>) => call<AppSettings>('settings:set', patch),

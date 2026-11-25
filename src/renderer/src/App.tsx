@@ -12,7 +12,7 @@ import { FtpView } from './components/FtpView'
 import { SettingsDialog } from './components/SettingsDialog'
 import { CommandPalette, type PaletteItem } from './components/CommandPalette'
 import { getSettings, updateSettings, useIsDark, useSettings } from './settings'
-import { getTheme } from './themes'
+import { useTerminalTheme } from './themes'
 import { errMsg, parseQuick, uid } from './util'
 
 type View = 'terminal' | 'files' | 'split'
@@ -75,12 +75,7 @@ export default function App() {
   const [prompt, setPrompt] = useState<{ opts: PromptOptions; resolve: (v: string | null, c: boolean) => void } | null>(null)
   const settings = useSettings()
   const isDark = useIsDark()
-  const termTheme = getTheme(isDark ? settings.terminalThemeDark : settings.terminalThemeLight, isDark)
-  useEffect(() => {
-    const root = document.documentElement
-    root.dataset.theme = isDark ? 'dark' : 'light'
-    root.style.setProperty('--bg-term', termTheme.colors.background ?? '')
-  }, [isDark, termTheme])
+  const termTheme = useTerminalTheme(settings, isDark)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [palette, setPalette] = useState<'sessions' | 'all' | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(() => loadNum('sidebarWidth', 250))
@@ -572,6 +567,7 @@ export default function App() {
       cmd('font-', '缩小字体', '⌘-', () => updateSettings({ fontSize: Math.max(9, settings.fontSize - 1) }), 'font zoom'),
       cmd('font0', '重置字体大小', '⌘0', () => updateSettings({ fontSize: 14 }), 'font zoom'),
       cmd('reopen', '重新打开关闭的标签页', '⌘⇧T', () => void reopenTab(), 'undo reopen 撤销'),
+      cmd('quick', '显示 / 隐藏 Quick Terminal', undefined, () => void window.api.quick.toggle(), 'quick terminal dropdown 下拉 快捷终端'),
       cmd('appearance-dark', '切换到深色外观', undefined, () => updateSettings({ appearance: 'dark' }), 'theme dark 主题 外观'),
       cmd('appearance-light', '切换到浅色外观', undefined, () => updateSettings({ appearance: 'light' }), 'theme light 主题 外观'),
       cmd('appearance-system', '外观跟随系统', undefined, () => updateSettings({ appearance: 'system' }), 'theme system 主题 外观')
@@ -608,7 +604,10 @@ export default function App() {
       toggle('gpuRendering', 'GPU 加速渲染'),
       toggle('showHiddenFiles', '默认显示隐藏文件'),
       toggle('dimUnfocusedSplits', '未聚焦的分屏变暗'),
-      toggle('bellNotify', '响铃提醒')
+      toggle('bellNotify', '响铃提醒'),
+      toggle('fontLigatures', '连字'),
+      toggle('terminalImages', '在终端中显示图片'),
+      toggle('backgroundBlur', '毛玻璃背景')
     ]
     return [...actions, ...tabItems, ...sessionItems, ...toggles]
   }

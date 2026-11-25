@@ -1,3 +1,4 @@
+import type { WebContents } from 'electron'
 import type { ConnectRequest, ConnectResult, FtpOptions } from '../shared/types'
 import { register } from './connections'
 import { FtpFs, type FtpConfig } from './ftpfs'
@@ -45,7 +46,7 @@ async function buildConfig(req: ConnectRequest): Promise<{ cfg: FtpConfig; title
   throw new Error('缺少连接参数')
 }
 
-export async function connect(req: ConnectRequest): Promise<ConnectResult> {
+export async function connect(req: ConnectRequest, owner: WebContents): Promise<ConnectResult> {
   const { cfg, title } = await buildConfig(req)
   const browse = new FtpFs(cfg)
   // 先登录一次，尽早暴露地址 / 认证 / 证书错误
@@ -57,6 +58,7 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
     homeDir,
     fs: browse,
     encoding: cfg.encoding,
+    owner,
     xfer: new FtpFs(cfg),
     end: () => browse.close()
   })

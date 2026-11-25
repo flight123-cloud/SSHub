@@ -157,6 +157,10 @@ export interface AppSettings {
   terminalThemeDark: string
   /** 浅色模式下使用的终端配色 */
   terminalThemeLight: string
+  /** 终端背景不透明度（0.3 - 1） */
+  backgroundOpacity: number
+  /** 窗口毛玻璃效果（macOS） */
+  backgroundBlur: boolean
   // 终端外观
   fontFamily: string
   fontSize: number
@@ -168,6 +172,10 @@ export interface AppSettings {
   gpuRendering: boolean
   /** 最低对比度（1 = 不调整，WCAG 对比度 1-21） */
   minimumContrast: number
+  /** 连字（如 => 显示为箭头，需要使用支持连字的字体） */
+  fontLigatures: boolean
+  /** 在终端中显示图片（Sixel / iTerm2 图片协议） */
+  terminalImages: boolean
   // 终端行为
   copyOnSelect: boolean
   /** 粘贴多行内容前确认（远程程序开启了括号粘贴模式时不提示） */
@@ -189,6 +197,16 @@ export interface AppSettings {
   notifyAfterSeconds: number
   /** 终端响铃（\a）时通知并在标签页上标记 */
   bellNotify: boolean
+  // Quick Terminal
+  quickTerminalEnabled: boolean
+  /** 全局快捷键（Electron accelerator 格式） */
+  quickTerminalHotkey: string
+  /** 呼出时连接的会话 ID（空 = 每次让用户选择） */
+  quickTerminalSessionId: string
+  /** 高度占屏幕的百分比 */
+  quickTerminalHeight: number
+  /** 失去焦点时自动隐藏 */
+  quickTerminalAutoHide: boolean
   // 连接与文件
   /** 关闭标签页后可撤销的秒数（0 = 不可撤销） */
   undoCloseSeconds: number
@@ -202,6 +220,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   appearance: 'system',
   terminalThemeDark: 'sshub-dark',
   terminalThemeLight: 'sshub-light',
+  backgroundOpacity: 1,
+  backgroundBlur: false,
   fontFamily: '"SF Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace',
   fontSize: 14,
   lineHeight: 1.15,
@@ -210,6 +230,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   scrollback: 10000,
   gpuRendering: true,
   minimumContrast: 1,
+  fontLigatures: false,
+  terminalImages: true,
   copyOnSelect: false,
   pasteProtection: true,
   osc52Write: true,
@@ -221,6 +243,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notifyAfterSeconds: 10,
   bellNotify: true,
   undoCloseSeconds: 10,
+  quickTerminalEnabled: false,
+  quickTerminalHotkey: 'Control+`',
+  quickTerminalSessionId: '',
+  quickTerminalHeight: 45,
+  quickTerminalAutoHide: true,
   confirmCloseConnected: true,
   doubleClickText: 'edit',
   showHiddenFiles: false

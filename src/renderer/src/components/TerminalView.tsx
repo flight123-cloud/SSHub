@@ -6,6 +6,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ClipboardAddon } from '@xterm/addon-clipboard'
+import { ImageAddon } from '@xterm/addon-image'
+import { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { ITheme } from '@xterm/xterm'
 import type { AppSettings, ConnectRequest, ConnectResult } from '../../../shared/types'
 import { bindConnection, onCommand } from '../bus'
@@ -50,6 +52,8 @@ export function TerminalView(props: TerminalViewProps) {
   const [pasteAsk, setPasteAsk] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<string | null>(null)
   const webglRef = useRef<WebglAddon | null>(null)
+  const imageRef = useRef<ImageAddon | null>(null)
+  const ligRef = useRef<LigaturesAddon | null>(null)
   const sizeRef = useRef<{ cols: number; rows: number } | null>(null)
   const overlayTimer = useRef<number | undefined>(undefined)
   const settingsRef = useRef(props.settings)
@@ -89,6 +93,45 @@ export function TerminalView(props: TerminalViewProps) {
       webglRef.current.dispose()
       webglRef.current = null
     }
+  }
+
+  /** 终端内图片（Sixel / iTerm2 图片协议） */
+  const applyImages = (on: boolean): void => {
+    const term = termRef.current
+    if (!term) return
+    if (on && !imageRef.current) {
+      try {
+        const addon = new ImageAddon({ sixelSupport: true, iipSupport: true, storageLimit: 64, pixelLimit: 16777216 })
+        term.loadAddon(addon)
+        imageRef.current = addon
+      } catch {
+        imageRef.current = null
+      }
+    } else if (!on && imageRef.current) {
+      imageRef.current.dispose()
+      imageRef.current = null
+    }
+  }
+
+  /** 连字：需要在 WebGL 渲染器之前加载，所以切换时先卸下 WebGL 再装回去 */
+  const applyLigatures = (on: boolean): void => {
+    const term = termRef.current
+    if (!term || on === !!ligRef.current) return
+    const hadGpu = !!webglRef.current
+    if (hadGpu) applyRenderer(false)
+    if (on) {
+      try {
+        const addon = new LigaturesAddon()
+        term.loadAddon(addon)
+        ligRef.current = addon
+      } catch {
+        ligRef.current = null
+      }
+    } else {
+      ligRef.current?.dispose()
+      ligRef.current = null
+    }
+    if (hadGpu) applyRenderer(true)
   }
 
   const showSize = (cols: number, rows: number): void => {
@@ -187,6 +230,8 @@ export function TerminalView(props: TerminalViewProps) {
       minimumContrastRatio: st.minimumContrast,
       macOptionIsMeta: st.optionAsAlt,
       allowProposedApi: true,
+      // 半透明背景需要；对性能影响很小
+      allowTransparency: true,
       macOptionClickForcesSelection: true,
       theme: props.theme
     })
@@ -211,7 +256,9 @@ export function TerminalView(props: TerminalViewProps) {
     fitRef.current = fit
     searchRef.current = search
     term.open(hostRef.current!)
+    applyLigatures(st.fontLigatures)
     applyRenderer(st.gpuRendering)
+    applyImages(st.terminalImages)
     doFit()
 
     // 选中即复制
@@ -350,7 +397,9 @@ export function TerminalView(props: TerminalViewProps) {
     if (o.scrollback !== st.scrollback) o.scrollback = st.scrollback
     if (o.minimumContrastRatio !== st.minimumContrast) o.minimumContrastRatio = st.minimumContrast
     if (o.macOptionIsMeta !== st.optionAsAlt) o.macOptionIsMeta = st.optionAsAlt
+    applyLigatures(st.fontLigatures)
     applyRenderer(st.gpuRendering)
+    applyImages(st.terminalImages)
     doFit()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.settings])

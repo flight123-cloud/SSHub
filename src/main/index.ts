@@ -7,7 +7,9 @@ import * as ftp from './ftp'
 import * as conns from './connections'
 import { friendlyError } from './errors'
 import { openExternal } from './externalEdit'
-import { applyNativeTheme, getSettings, resetSettings, updateSettings } from './settings'
+import { applyNativeTheme, getSettings, onSettingsChange, resetSettings, updateSettings } from './settings'
+import * as quick from './quick'
+import { applyWindowEffects } from './windowEffects'
 import { localfs } from './localfs'
 import { sessionStore } from './store'
 
@@ -35,8 +37,8 @@ function createWindow(): void {
       sandbox: true
     }
   })
-  conns.setMainWindow(win)
 
+  applyWindowEffects(win, getSettings())
   win.once('ready-to-show', () => win?.show())
 
   // 外部链接用系统浏览器打开
@@ -59,12 +61,15 @@ function createWindow(): void {
 
   win.on('closed', () => {
     win = null
+    // 主窗口关闭：它的连接已随窗口断开；非 macOS 直接退出（即使 Quick Terminal 还在）
+    if (process.platform !== 'darwin') app.quit()
   })
 }
 
 function buildMenu(): void {
   const isMac = process.platform === 'darwin'
-  const sendCmd = (cmd: string) => () => win?.webContents.send('menu:command', cmd)
+  // 菜单命令发给当前聚焦的窗口（主窗口或 Quick Terminal）
+  const sendCmd = (cmd: string) => () => (BrowserWindow.getFocusedWindow() ?? win)?.webContents.send('menu:command', cmd)
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
       ? [
@@ -92,6 +97,7 @@ function buildMenu(): void {
         { label: '重新打开关闭的标签页', accelerator: 'CmdOrCtrl+Shift+T', click: sendCmd('reopen-tab') },
         { label: '搜索会话并连接…', accelerator: 'CmdOrCtrl+P', click: sendCmd('palette-sessions') },
         { label: '命令面板…', accelerator: 'CmdOrCtrl+Shift+P', click: sendCmd('palette') },
+        { label: '显示 / 隐藏 Quick Terminal', click: () => quick.toggle() },
         { type: 'separator' },
         { label: '关闭分屏 / 标签页', accelerator: 'CmdOrCtrl+W', click: sendCmd('close-tab') },
         ...(isMac
@@ -180,6 +186,17 @@ function handle<A extends unknown[], R>(channel: string, fn: (...args: A) => R |
   })
 }
 
+/** 需要知道是哪个窗口发起的调用 */
+function handleWithSender<R>(channel: string, fn: (sender: Electron.WebContents, ...args: unknown[]) => R | Promise<R>): void {
+  ipcMain.handle(channel, async (e, ...args: unknown[]): Promise<ApiResult<R>> => {
+    try {
+      return { ok: true, data: await fn(e.sender, ...args) }
+    } catch (err) {
+      return { ok: false, error: friendlyError(err) }
+    }
+  })
+}
+
 function registerIpc(): void {
   // 会话
   handle('session:list', () => sessionStore.list())
@@ -188,10 +205,10 @@ function registerIpc(): void {
   handle('session:duplicate', (id: string) => sessionStore.duplicate(id))
 
   // SSH
-  handle('ssh:connect', (req) => ssh.connect(req as never))
+  handleWithSender('ssh:connect', (sender, req) => ssh.connect(req as never, sender))
   ipcMain.on('ssh:write', (_e, id: string, data: string) => ssh.write(id, data))
   ipcMain.on('ssh:resize', (_e, id: string, cols: number, rows: number) => ssh.resize(id, cols, rows))
-  handle('ftp:connect', (req) => ftp.connect(req as never))
+  handleWithSender('ftp:connect', (sender, req) => ftp.connect(req as never, sender))
   handle('conn:disconnect', (id: string) => conns.disconnect(id))
 
   // 远程文件（SFTP / FTP 通用）
@@ -223,29 +240,30 @@ function registerIpc(): void {
   handle('local:createFile', (p: string) => localfs.createFile(p))
 
   // 杂项
-  handle('dialog:pickFile', async (title: string) => {
-    const r = await dialog.showOpenDialog(win!, {
-      title,
+  const parentOf = (sender: Electron.WebContents): BrowserWindow => BrowserWindow.fromWebContents(sender) ?? win!
+  handleWithSender('dialog:pickFile', async (sender, title) => {
+    const r = await dialog.showOpenDialog(parentOf(sender), {
+      title: title as string,
       defaultPath: path.join(localfs.home(), '.ssh'),
       properties: ['openFile', 'showHiddenFiles']
     })
     return r.canceled ? null : r.filePaths[0]
   })
-  handle('dialog:saveText', async (defaultName: string, content: string) => {
-    const r = await dialog.showSaveDialog(win!, {
+  handleWithSender('dialog:saveText', async (sender, defaultName, content) => {
+    const r = await dialog.showSaveDialog(parentOf(sender), {
       title: '保存终端输出',
-      defaultPath: path.join(app.getPath('downloads'), defaultName),
+      defaultPath: path.join(app.getPath('downloads'), defaultName as string),
       filters: [{ name: '文本文件', extensions: ['txt', 'log'] }]
     })
     if (r.canceled || !r.filePath) return null
-    await fs.promises.writeFile(r.filePath, content, 'utf8')
+    await fs.promises.writeFile(r.filePath, content as string, 'utf8')
     return r.filePath
   })
-  handle('dialog:confirm', async (message: string, detail?: string) => {
-    const r = await dialog.showMessageBox(win!, {
+  handleWithSender('dialog:confirm', async (sender, message, detail) => {
+    const r = await dialog.showMessageBox(parentOf(sender), {
       type: 'question',
-      message,
-      detail,
+      message: message as string,
+      detail: detail as string | undefined,
       buttons: ['取消', '确定'],
       defaultId: 1,
       cancelId: 0
@@ -263,6 +281,10 @@ function registerIpc(): void {
     else win?.flashFrame(true)
   })
   handle('clipboard:write', (text: string) => clipboard.writeText(text))
+  handle('quick:toggle', () => quick.toggle())
+  handle('quick:hide', () => quick.hide())
+  handle('quick:hotkeyStatus', () => quick.applyHotkey())
+  handleWithSender('app:isQuick', (sender) => quick.isQuickWindow(sender))
   handle('settings:get', () => getSettings())
   handle('settings:set', (patch: Partial<AppSettings>) => updateSettings(patch))
   handle('settings:reset', () => resetSettings())
@@ -274,15 +296,17 @@ app.whenReady().then(() => {
   buildMenu()
   registerIpc()
   createWindow()
+  quick.initQuickTerminal()
+  onSettingsChange((s) => win && applyWindowEffects(win, s))
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    // Quick Terminal 窗口不算主窗口
+    if (!win) createWindow()
   })
 })
 
 app.on('before-quit', () => conns.disconnectAll())
 
 app.on('window-all-closed', () => {
-  // macOS 上关闭窗口时断开所有连接，应用保持在 Dock 中
-  conns.disconnectAll()
+  // macOS 上关闭所有窗口后应用保持在 Dock 中
   if (process.platform !== 'darwin') app.quit()
 })

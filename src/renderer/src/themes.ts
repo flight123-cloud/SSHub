@@ -1,4 +1,6 @@
+import { useEffect, useMemo } from 'react'
 import type { ITheme } from '@xterm/xterm'
+import type { AppSettings } from '../../shared/types'
 
 export interface TermTheme {
   id: string
@@ -96,4 +98,36 @@ export const THEMES: TermTheme[] = [
 
 export function getTheme(id: string, fallbackDark: boolean): TermTheme {
   return THEMES.find((x) => x.id === id) ?? THEMES.find((x) => x.id === (fallbackDark ? 'sshub-dark' : 'sshub-light'))!
+}
+
+/** #rrggbb → rgba(r,g,b,a) */
+function withAlpha(hex: string | undefined, a: number): string | undefined {
+  if (!hex || a >= 1) return hex
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+  if (!m) return hex
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${a})`
+}
+
+/**
+ * 当前终端配色（考虑深浅色与背景透明度），并同步到页面：
+ * data-theme（界面深浅色）、data-translucent（半透明）、--bg-term（终端背景色）
+ */
+export function useTerminalTheme(s: AppSettings, isDark: boolean): TermTheme {
+  const base = getTheme(isDark ? s.terminalThemeDark : s.terminalThemeLight, isDark)
+  const translucent = s.backgroundOpacity < 1
+  const theme = useMemo<TermTheme>(
+    () =>
+      translucent
+        ? { ...base, colors: { ...base.colors, background: withAlpha(base.colors.background, s.backgroundOpacity) } }
+        : base,
+    [base, translucent, s.backgroundOpacity]
+  )
+  useEffect(() => {
+    const root = document.documentElement
+    root.dataset.theme = isDark ? 'dark' : 'light'
+    if (translucent) root.dataset.translucent = '1'
+    else delete root.dataset.translucent
+    root.style.setProperty('--bg-term', theme.colors.background ?? '')
+  }, [isDark, theme, translucent])
+  return theme
 }

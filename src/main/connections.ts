@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, type WebContents } from 'electron'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
@@ -22,26 +22,38 @@ export interface Conn {
   xfer: RemoteFs
   /** 断开连接 */
   end: () => void
+  /** 发起这条连接的窗口：终端数据、传输进度只发给它 */
+  owner: WebContents
   queue: TransferItem[]
   running?: TransferItem
 }
 
 const conns = new Map<string, Conn>()
 
-let mainWindow: BrowserWindow | null = null
-export function setMainWindow(win: BrowserWindow): void {
-  mainWindow = win
+export function sendTo(wc: WebContents | undefined, channel: string, ...args: unknown[]): void {
+  if (wc && !wc.isDestroyed()) wc.send(channel, ...args)
 }
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow
+
+/** 发给所有窗口（例如设置变化） */
+export function broadcast(channel: string, ...args: unknown[]): void {
+  for (const w of BrowserWindow.getAllWindows()) sendTo(w.webContents, channel, ...args)
 }
-export function send(channel: string, ...args: unknown[]): void {
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
+
+/** 连接 ID → 所属窗口（连接关闭后仍保留，便于发送最后的传输状态） */
+const owners = new Map<string, WebContents>()
+export function ownerOf(connId: string): WebContents | undefined {
+  return owners.get(connId)
 }
 
 export function register(c: Omit<Conn, 'id' | 'closed' | 'queue'>): Conn {
   const conn: Conn = { ...c, id: randomUUID(), closed: false, queue: [] }
   conns.set(conn.id, conn)
+  owners.set(conn.id, c.owner)
+  // 窗口关闭时断开它的所有连接
+  c.owner.once('destroyed', () => {
+    disconnect(conn.id)
+    owners.delete(conn.id)
+  })
   return conn
 }
 
@@ -154,7 +166,7 @@ export function emitTransfer(t: TransferItem, force = true): void {
   if (!force && now - (lastEmit.get(t.id) ?? 0) < 150) return
   lastEmit.set(t.id, now)
   if (t.status === 'done' || t.status === 'error' || t.status === 'canceled') lastEmit.delete(t.id)
-  send('transfer:update', { ...t })
+  sendTo(owners.get(t.connId), 'transfer:update', { ...t })
 }
 
 export function enqueueTransfer(
