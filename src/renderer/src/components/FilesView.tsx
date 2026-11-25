@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileEntry, TransferItem } from '../../../shared/types'
 import { onTransfer } from '../bus'
 import { errMsg, isTextFile, posixJoin, posixParent } from '../util'
+import { getSettings, useSettings } from '../settings'
 import type { MenuItem } from './ContextMenu'
 import { FilePane, type Side } from './FilePane'
 import { PromptDialog, type PromptOptions } from './Modal'
@@ -22,7 +23,8 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   const [local, setLocal] = useState<PaneState>({ cwd: '', entries: [], loading: true })
   const [remote, setRemote] = useState<PaneState>({ cwd: props.homeDir, entries: [], loading: true })
   const [localHome, setLocalHome] = useState('')
-  const [showHidden, setShowHidden] = useState(false)
+  const settings = useSettings()
+  const [showHidden, setShowHidden] = useState(() => getSettings().showHiddenFiles)
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [prompt, setPrompt] = useState<{ opts: PromptOptions; resolve: (v: string | null) => void } | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
@@ -231,7 +233,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   /** 双击远程文件：文本文件直接在线编辑，其它文件下载 */
   const remoteOpen = (f: FileEntry): void => {
     if (f.isDir) void loadRemote(f.path)
-    else if (isTextFile(f.name, f.size)) remoteEdit(f)
+    else if (settings.doubleClickText === 'edit' && isTextFile(f.name, f.size)) remoteEdit(f)
     else void download([f.path])
   }
 

@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, clipboard } from 'electron'
+import fs from 'fs'
 import path from 'path'
-import type { ApiResult, Encoding } from '../shared/types'
+import type { ApiResult, AppSettings, Encoding } from '../shared/types'
 import * as ssh from './ssh'
 import * as ftp from './ftp'
 import * as conns from './connections'
 import { friendlyError } from './errors'
 import { openExternal } from './externalEdit'
+import { getSettings, resetSettings, updateSettings } from './settings'
 import { localfs } from './localfs'
 import { sessionStore } from './store'
 
@@ -71,6 +73,8 @@ function buildMenu(): void {
             submenu: [
               { role: 'about' as const, label: '关于 SSHub' },
               { type: 'separator' as const },
+              { label: '设置…', accelerator: 'CmdOrCtrl+,', click: sendCmd('settings') },
+              { type: 'separator' as const },
               { role: 'hide' as const, label: '隐藏 SSHub' },
               { role: 'hideOthers' as const, label: '隐藏其他' },
               { role: 'unhide' as const, label: '全部显示' },
@@ -85,9 +89,17 @@ function buildMenu(): void {
       submenu: [
         { label: '新建会话…', accelerator: 'CmdOrCtrl+N', click: sendCmd('new-session') },
         { label: '快速连接', accelerator: 'CmdOrCtrl+K', click: sendCmd('quick-connect') },
+        { label: '搜索会话并连接…', accelerator: 'CmdOrCtrl+P', click: sendCmd('palette-sessions') },
+        { label: '命令面板…', accelerator: 'CmdOrCtrl+Shift+P', click: sendCmd('palette') },
         { type: 'separator' },
         { label: '关闭标签页', accelerator: 'CmdOrCtrl+W', click: sendCmd('close-tab') },
-        ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'quit' as const, label: '退出' }])
+        ...(isMac
+          ? []
+          : [
+              { type: 'separator' as const },
+              { label: '设置…', accelerator: 'CmdOrCtrl+,', click: sendCmd('settings') },
+              { role: 'quit' as const, label: '退出' }
+            ])
       ]
     },
     {
@@ -102,7 +114,8 @@ function buildMenu(): void {
         { role: 'selectAll', label: '全选' },
         { type: 'separator' },
         { label: '查找', accelerator: 'CmdOrCtrl+F', click: sendCmd('find') },
-        { label: '清屏', accelerator: 'CmdOrCtrl+L', click: sendCmd('clear') }
+        { label: '清屏', accelerator: 'CmdOrCtrl+L', click: sendCmd('clear') },
+        { label: '将终端输出保存为文件…', accelerator: 'CmdOrCtrl+Shift+S', click: sendCmd('save-output') }
       ]
     },
     {
@@ -199,6 +212,16 @@ function registerIpc(): void {
     })
     return r.canceled ? null : r.filePaths[0]
   })
+  handle('dialog:saveText', async (defaultName: string, content: string) => {
+    const r = await dialog.showSaveDialog(win!, {
+      title: '保存终端输出',
+      defaultPath: path.join(app.getPath('downloads'), defaultName),
+      filters: [{ name: '文本文件', extensions: ['txt', 'log'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    await fs.promises.writeFile(r.filePath, content, 'utf8')
+    return r.filePath
+  })
   handle('dialog:confirm', async (message: string, detail?: string) => {
     const r = await dialog.showMessageBox(win!, {
       type: 'question',
@@ -211,6 +234,9 @@ function registerIpc(): void {
     return r.response === 1
   })
   handle('clipboard:write', (text: string) => clipboard.writeText(text))
+  handle('settings:get', () => getSettings())
+  handle('settings:set', (patch: Partial<AppSettings>) => updateSettings(patch))
+  handle('settings:reset', () => resetSettings())
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform }))
 }
 

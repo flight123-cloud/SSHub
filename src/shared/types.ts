@@ -147,3 +147,55 @@ export interface ExternalEditEvent {
   status: 'opened' | 'synced' | 'error'
   error?: string
 }
+
+/** 应用设置（保存在 ~/Library/Application Support/SSHub/settings.json） */
+export interface AppSettings {
+  // 终端外观
+  fontFamily: string
+  fontSize: number
+  lineHeight: number
+  cursorStyle: 'block' | 'bar' | 'underline'
+  cursorBlink: boolean
+  scrollback: number
+  /** GPU（WebGL）渲染 */
+  gpuRendering: boolean
+  /** 最低对比度（1 = 不调整，WCAG 对比度 1-21） */
+  minimumContrast: number
+  // 终端行为
+  copyOnSelect: boolean
+  /** 粘贴多行内容前确认（远程程序开启了括号粘贴模式时不提示） */
+  pasteProtection: boolean
+  /** 允许服务器上的程序通过 OSC 52 写入本机剪贴板 */
+  osc52Write: boolean
+  /** Option 键作为 Alt/Meta 使用 */
+  optionAsAlt: boolean
+  /** 终端里右键：弹出菜单 / 直接粘贴 */
+  rightClick: 'menu' | 'paste'
+  /** 调整大小时显示行列数 */
+  resizeOverlay: boolean
+  // 连接与文件
+  confirmCloseConnected: boolean
+  /** 双击远程文本文件：编辑 / 下载 */
+  doubleClickText: 'edit' | 'download'
+  showHiddenFiles: boolean
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  fontFamily: '"SF Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace',
+  fontSize: 14,
+  lineHeight: 1.15,
+  cursorStyle: 'block',
+  cursorBlink: true,
+  scrollback: 10000,
+  gpuRendering: true,
+  minimumContrast: 1,
+  copyOnSelect: false,
+  pasteProtection: true,
+  osc52Write: true,
+  optionAsAlt: false,
+  rightClick: 'menu',
+  resizeOverlay: true,
+  confirmCloseConnected: true,
+  doubleClickText: 'edit',
+  showHiddenFiles: false
+}

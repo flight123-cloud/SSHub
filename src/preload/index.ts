@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   ApiResult,
+  AppSettings,
   ConnectRequest,
   ConnectResult,
   Encoding,
@@ -86,9 +87,18 @@ const api = {
     pathForFile: (f: File) => webUtils.getPathForFile(f)
   },
 
+  settings: {
+    get: () => call<AppSettings>('settings:get'),
+    set: (patch: Partial<AppSettings>) => call<AppSettings>('settings:set', patch),
+    reset: () => call<AppSettings>('settings:reset'),
+    onChange: (cb: (s: AppSettings) => void) => on('settings:changed', cb)
+  },
+
   ui: {
     pickFile: (title: string) => call<string | null>('dialog:pickFile', title),
     confirm: (message: string, detail?: string) => call<boolean>('dialog:confirm', message, detail),
+    /** 弹出保存对话框，写入文本；取消时返回 null */
+    saveText: (defaultName: string, content: string) => call<string | null>('dialog:saveText', defaultName, content),
     copyText: (text: string) => call<void>('clipboard:write', text),
     onMenu: (cb: (cmd: string) => void) => on('menu:command', cb)
   }

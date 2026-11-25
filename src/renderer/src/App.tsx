@@ -7,6 +7,9 @@ import { PromptDialog, type PromptOptions } from './components/Modal'
 import { TerminalView, type ConnStatus } from './components/TerminalView'
 import { FilesView } from './components/FilesView'
 import { FtpView } from './components/FtpView'
+import { SettingsDialog } from './components/SettingsDialog'
+import { CommandPalette, type PaletteItem } from './components/CommandPalette'
+import { getSettings, updateSettings, useSettings } from './settings'
 import { errMsg, parseQuick, uid } from './util'
 
 type View = 'terminal' | 'files' | 'split'
@@ -53,7 +56,9 @@ export default function App() {
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ session?: SessionInfo } | null>(null)
   const [prompt, setPrompt] = useState<{ opts: PromptOptions; resolve: (v: string | null, c: boolean) => void } | null>(null)
-  const [fontSize, setFontSize] = useState(() => loadNum('fontSize', 14))
+  const settings = useSettings()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [palette, setPalette] = useState<'sessions' | 'all' | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(() => loadNum('sidebarWidth', 250))
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -198,7 +203,12 @@ export default function App() {
   const closeTab = async (key: string): Promise<void> => {
     const tab = tabsRef.current.find((t) => t.key === key)
     if (!tab) return
-    if (tab.status === 'connected' && !(await window.api.ui.confirm(`断开并关闭「${tab.title}」？`))) return
+    if (
+      tab.status === 'connected' &&
+      getSettings().confirmCloseConnected &&
+      !(await window.api.ui.confirm(`断开并关闭「${tab.title}」？`))
+    )
+      return
     prepares.current.delete(key)
     setTabs((list) => {
       const idx = list.findIndex((t) => t.key === key)
@@ -224,8 +234,7 @@ export default function App() {
             setEditing({})
             break
           case 'quick-connect':
-            setSidebarOpen(true)
-            setTimeout(() => (document.querySelector('[data-quick-connect]') as HTMLInputElement | null)?.focus(), 50)
+            focusQuickConnect()
             break
           case 'close-tab':
             // 打开了编辑器时，⌘W 只关闭编辑器
@@ -241,13 +250,22 @@ export default function App() {
             setSidebarOpen((v) => !v)
             break
           case 'font-bigger':
-            setFontSize((f) => Math.min(32, f + 1))
+            updateSettings({ fontSize: Math.min(32, getSettings().fontSize + 1) })
             break
           case 'font-smaller':
-            setFontSize((f) => Math.max(9, f - 1))
+            updateSettings({ fontSize: Math.max(9, getSettings().fontSize - 1) })
             break
           case 'font-reset':
-            setFontSize(14)
+            updateSettings({ fontSize: 14 })
+            break
+          case 'settings':
+            setSettingsOpen(true)
+            break
+          case 'palette':
+            setPalette('all')
+            break
+          case 'palette-sessions':
+            setPalette('sessions')
             break
           case 'prev-tab':
           case 'next-tab': {
@@ -265,7 +283,6 @@ export default function App() {
     []
   )
 
-  useEffect(() => saveNum('fontSize', fontSize), [fontSize])
   useEffect(() => saveNum('sidebarWidth', sidebarWidth), [sidebarWidth])
 
   const startResize = (e: React.MouseEvent): void => {
@@ -281,6 +298,82 @@ export default function App() {
   }
 
   const groups = [...new Set(sessions.map((s) => s.group).filter(Boolean))]
+
+  function focusQuickConnect(): void {
+    setSidebarOpen(true)
+    setTimeout(() => (document.querySelector('[data-quick-connect]') as HTMLInputElement | null)?.focus(), 50)
+  }
+
+  /** 命令面板条目：已打开的标签页、已保存的会话、操作 */
+  const buildPalette = (mode: 'sessions' | 'all'): PaletteItem[] => {
+    const activeTab = tabs.find((t) => t.key === activeKey)
+    const toggle = (key: keyof typeof settings, label: string): PaletteItem => ({
+      id: 'toggle-' + key,
+      group: '设置',
+      label: `${settings[key] ? '关闭' : '开启'}：${label}`,
+      run: () => updateSettings({ [key]: !settings[key] })
+    })
+    const tabItems: PaletteItem[] = tabs.map((t, i) => ({
+      id: 'tab-' + t.key,
+      group: '已打开的标签页',
+      label: t.title,
+      hint: `${t.protocol === 'ftp' ? 'FTP' : 'SSH'} · ${t.status === 'connected' ? '已连接' : t.status === 'connecting' ? '连接中' : '未连接'}`,
+      keywords: 'tab 标签 ' + i,
+      run: () => setActiveKey(t.key)
+    }))
+    const sessionItems: PaletteItem[] = [...sessions]
+      .sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0))
+      .map((x) => ({
+        id: 'session-' + x.id,
+        group: '连接会话',
+        label: x.name,
+        hint: `${x.protocol === 'ftp' ? 'FTP' : 'SSH'} ${x.username}@${x.host}${x.port !== (x.protocol === 'ftp' ? 21 : 22) ? ':' + x.port : ''}${x.group ? ' · ' + x.group : ''}`,
+        keywords: `${x.host} ${x.username} ${x.group}`,
+        run: () => connectSession(x)
+      }))
+    if (mode === 'sessions') return [...tabItems, ...sessionItems]
+    const cmd = (id: string, label: string, shortcut: string | undefined, run: () => void, keywords?: string): PaletteItem => ({
+      id: 'cmd-' + id,
+      group: '操作',
+      label,
+      shortcut,
+      keywords,
+      run
+    })
+    const actions: PaletteItem[] = [
+      cmd('new-session', '新建会话', '⌘N', () => setEditing({}), 'new add'),
+      cmd('quick', '快速连接', '⌘K', focusQuickConnect, 'quick connect'),
+      cmd('settings', '打开设置', '⌘,', () => setSettingsOpen(true), 'settings preferences 偏好'),
+      cmd('sidebar', sidebarOpen ? '隐藏会话列表' : '显示会话列表', '⌘B', () => setSidebarOpen(!sidebarOpen), 'sidebar'),
+      cmd('font+', '放大字体', '⌘+', () => updateSettings({ fontSize: Math.min(32, settings.fontSize + 1) }), 'font zoom'),
+      cmd('font-', '缩小字体', '⌘-', () => updateSettings({ fontSize: Math.max(9, settings.fontSize - 1) }), 'font zoom'),
+      cmd('font0', '重置字体大小', '⌘0', () => updateSettings({ fontSize: 14 }), 'font zoom')
+    ]
+    if (activeTab) {
+      if (activeTab.protocol === 'ssh') {
+        actions.push(
+          cmd('v-term', '切换到终端', '⌘1', () => updateTab(activeTab.key, { view: 'terminal' }), 'terminal view'),
+          cmd('v-files', '切换到文件传输', '⌘2', () => updateTab(activeTab.key, { view: 'files' }), 'files sftp view'),
+          cmd('v-split', '切换到分屏', '⌘3', () => updateTab(activeTab.key, { view: 'split' }), 'split view'),
+          cmd('find', '在终端中查找', '⌘F', () => emitCommand('find'), 'search find'),
+          cmd('clear', '清屏', '⌘L', () => emitCommand('clear'), 'clear'),
+          cmd('save-output', '将终端输出保存为文件', '⌘⇧S', () => emitCommand('save-output'), 'save export log')
+        )
+      }
+      const sess = sessions.find((x) => x.id === activeTab.sessionId)
+      if (sess) actions.push(cmd('edit-session', `编辑会话「${sess.name}」`, undefined, () => setEditing({ session: sess }), 'edit'))
+      actions.push(cmd('close-tab', `关闭标签页「${activeTab.title}」`, '⌘W', () => void closeTab(activeTab.key), 'close'))
+    }
+    const toggles = [
+      toggle('pasteProtection', '粘贴保护'),
+      toggle('copyOnSelect', '选中即复制'),
+      toggle('osc52Write', '允许服务器写入剪贴板'),
+      toggle('optionAsAlt', 'Option 键作为 Alt'),
+      toggle('gpuRendering', 'GPU 加速渲染'),
+      toggle('showHiddenFiles', '默认显示隐藏文件')
+    ]
+    return [...actions, ...tabItems, ...sessionItems, ...toggles]
+  }
   const isMac = window.api.platform === 'darwin'
 
   return (
@@ -344,7 +437,7 @@ export default function App() {
                 <button className="primary" onClick={() => setEditing({})}>
                   新建会话
                 </button>
-                <button onClick={() => emitMenu('quick-connect', setSidebarOpen)}>快速连接</button>
+                <button onClick={focusQuickConnect}>快速连接</button>
               </div>
               <div className="muted small shortcuts">
                 ⌘N 新建会话 · ⌘K 快速连接 · ⌘1/2/3 切换终端/文件/分屏 · ⌘W 关闭标签
@@ -399,7 +492,8 @@ export default function App() {
                     <TerminalView
                       active={active}
                       visible={active && showTerm}
-                      fontSize={fontSize}
+                      title={t.title}
+                      settings={settings}
                       prepare={getPrepare(t.key)}
                       onStatus={(status, conn, error) =>
                         updateTab(t.key, conn ? { status, conn, error } : { status, error })
@@ -423,6 +517,24 @@ export default function App() {
         </div>
       </div>
 
+      {settingsOpen && (
+        <SettingsDialog
+          settings={settings}
+          onChange={updateSettings}
+          onReset={async () => {
+            if (await window.api.ui.confirm('恢复所有设置为默认值？')) await window.api.settings.reset()
+          }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {palette && (
+        <CommandPalette
+          key={palette}
+          items={buildPalette(palette)}
+          placeholder={palette === 'sessions' ? '搜索会话或标签页，回车连接 / 切换…' : '输入命令、会话名称或主机…'}
+          onClose={() => setPalette(null)}
+        />
+      )}
       {editing && (
         <SessionDialog
           session={editing.session}
@@ -454,11 +566,4 @@ export default function App() {
       </div>
     </div>
   )
-}
-
-function emitMenu(cmd: string, setSidebarOpen: (v: boolean) => void): void {
-  if (cmd === 'quick-connect') {
-    setSidebarOpen(true)
-    setTimeout(() => (document.querySelector('[data-quick-connect]') as HTMLInputElement | null)?.focus(), 50)
-  }
 }
