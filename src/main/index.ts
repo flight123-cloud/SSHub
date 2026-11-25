@@ -2,6 +2,9 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, clipboard } from 'ele
 import path from 'path'
 import type { ApiResult } from '../shared/types'
 import * as ssh from './ssh'
+import * as ftp from './ftp'
+import * as conns from './connections'
+import { friendlyError } from './errors'
 import { localfs } from './localfs'
 import { sessionStore } from './store'
 
@@ -29,7 +32,7 @@ function createWindow(): void {
       sandbox: true
     }
   })
-  ssh.setMainWindow(win)
+  conns.setMainWindow(win)
 
   win.once('ready-to-show', () => win?.show())
 
@@ -139,7 +142,7 @@ function handle<A extends unknown[], R>(channel: string, fn: (...args: A) => R |
     try {
       return { ok: true, data: await fn(...(args as A)) }
     } catch (err) {
-      return { ok: false, error: ssh.friendlyError(err) }
+      return { ok: false, error: friendlyError(err) }
     }
   })
 }
@@ -155,21 +158,22 @@ function registerIpc(): void {
   handle('ssh:connect', (req) => ssh.connect(req as never))
   ipcMain.on('ssh:write', (_e, id: string, data: string) => ssh.write(id, data))
   ipcMain.on('ssh:resize', (_e, id: string, cols: number, rows: number) => ssh.resize(id, cols, rows))
-  handle('ssh:disconnect', (id: string) => ssh.disconnect(id))
+  handle('ftp:connect', (req) => ftp.connect(req as never))
+  handle('conn:disconnect', (id: string) => conns.disconnect(id))
 
-  // SFTP
-  handle('sftp:list', (id: string, dir: string) => ssh.remoteList(id, dir))
-  handle('sftp:realpath', (id: string, p: string) => ssh.remoteRealpath(id, p))
-  handle('sftp:mkdir', (id: string, p: string) => ssh.remoteMkdir(id, p))
-  handle('sftp:rename', (id: string, a: string, b: string) => ssh.remoteRename(id, a, b))
-  handle('sftp:delete', (id: string, paths: string[]) => ssh.remoteDelete(id, paths))
-  handle('sftp:chmod', (id: string, p: string, mode: number) => ssh.remoteChmod(id, p, mode))
-  handle('sftp:readText', (id: string, p: string) => ssh.remoteReadText(id, p))
-  handle('sftp:writeText', (id: string, p: string, c: string) => ssh.remoteWriteText(id, p, c))
+  // 远程文件（SFTP / FTP 通用）
+  handle('remote:list', (id: string, dir: string) => conns.remote.list(id, dir))
+  handle('remote:realpath', (id: string, p: string) => conns.remote.realpath(id, p))
+  handle('remote:mkdir', (id: string, p: string) => conns.remote.mkdir(id, p))
+  handle('remote:rename', (id: string, a: string, b: string) => conns.remote.rename(id, a, b))
+  handle('remote:delete', (id: string, paths: string[]) => conns.remote.remove(id, paths))
+  handle('remote:chmod', (id: string, p: string, mode: number) => conns.remote.chmod(id, p, mode))
+  handle('remote:readText', (id: string, p: string) => conns.remote.readText(id, p))
+  handle('remote:writeText', (id: string, p: string, c: string) => conns.remote.writeText(id, p, c))
   handle('transfer:enqueue', (id: string, dir: 'upload' | 'download', src: string[], dest: string) =>
-    ssh.enqueueTransfer(id, dir, src, dest)
+    conns.enqueueTransfer(id, dir, src, dest)
   )
-  handle('transfer:cancel', (tid: string) => ssh.cancelTransfer(tid))
+  handle('transfer:cancel', (tid: string) => conns.cancelTransfer(tid))
 
   // 本地文件
   handle('local:home', () => localfs.home())
@@ -213,10 +217,10 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('before-quit', () => ssh.disconnectAll())
+app.on('before-quit', () => conns.disconnectAll())
 
 app.on('window-all-closed', () => {
   // macOS 上关闭窗口时断开所有连接，应用保持在 Dock 中
-  ssh.disconnectAll()
+  conns.disconnectAll()
   if (process.platform !== 'darwin') app.quit()
 })

@@ -35,21 +35,27 @@ const api = {
     connect: (req: ConnectRequest) => call<ConnectResult>('ssh:connect', req),
     write: (id: string, data: string) => ipcRenderer.send('ssh:write', id, data),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.send('ssh:resize', id, cols, rows),
-    disconnect: (id: string) => call<void>('ssh:disconnect', id),
+    disconnect: (id: string) => call<void>('conn:disconnect', id),
     onData: (cb: (id: string, data: Uint8Array) => void) => on('ssh:data', cb),
     onClosed: (cb: (id: string) => void) => on('ssh:closed', cb),
     onError: (cb: (id: string, msg: string) => void) => on('ssh:error', cb)
   },
 
-  sftp: {
-    list: (id: string, dir: string) => call<FileEntry[]>('sftp:list', id, dir),
-    realpath: (id: string, p: string) => call<string>('sftp:realpath', id, p),
-    mkdir: (id: string, p: string) => call<void>('sftp:mkdir', id, p),
-    rename: (id: string, a: string, b: string) => call<void>('sftp:rename', id, a, b),
-    remove: (id: string, paths: string[]) => call<void>('sftp:delete', id, paths),
-    chmod: (id: string, p: string, mode: number) => call<void>('sftp:chmod', id, p, mode),
-    readText: (id: string, p: string) => call<string>('sftp:readText', id, p),
-    writeText: (id: string, p: string, content: string) => call<void>('sftp:writeText', id, p, content)
+  ftp: {
+    connect: (req: ConnectRequest) => call<ConnectResult>('ftp:connect', req),
+    disconnect: (id: string) => call<void>('conn:disconnect', id)
+  },
+
+  /** 远程文件操作（SFTP / FTP 通用） */
+  remote: {
+    list: (id: string, dir: string) => call<FileEntry[]>('remote:list', id, dir),
+    realpath: (id: string, p: string) => call<string>('remote:realpath', id, p),
+    mkdir: (id: string, p: string) => call<void>('remote:mkdir', id, p),
+    rename: (id: string, a: string, b: string) => call<void>('remote:rename', id, a, b),
+    remove: (id: string, paths: string[]) => call<void>('remote:delete', id, paths),
+    chmod: (id: string, p: string, mode: number) => call<void>('remote:chmod', id, p, mode),
+    readText: (id: string, p: string) => call<string>('remote:readText', id, p),
+    writeText: (id: string, p: string, content: string) => call<void>('remote:writeText', id, p, content)
   },
 
   transfer: {

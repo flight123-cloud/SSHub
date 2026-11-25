@@ -1,3 +1,5 @@
+import type { FtpSecurity, Protocol, QuickTarget } from '../../shared/types'
+
 export function formatSize(n: number): string {
   if (!Number.isFinite(n) || n < 0) return '-'
   if (n < 1024) return `${n} B`
@@ -22,14 +24,42 @@ export function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** 解析 user@host:port */
-export function parseQuick(s: string): { username: string; host: string; port: number } | null {
-  const m = s.trim().match(/^(?:ssh\s+)?(?:([^@\s]+)@)?(\[[^\]]+\]|[^:\s]+)(?::(\d+))?$/)
+/**
+ * 解析快速连接地址：
+ *   user@host[:port]            → SSH
+ *   ssh://… / sftp://…          → SSH
+ *   ftp://[user[:pass]@]host[:port]   → FTP
+ *   ftps://…                    → 显式 FTPS；ftpes:// 同义；ftps-implicit:// 隐式 FTPS
+ */
+export function parseQuick(input: string): QuickTarget | null {
+  let s = input.trim().replace(/^ssh\s+/, '')
+  let protocol: Protocol = 'ssh'
+  let security: FtpSecurity = 'none'
+  const scheme = s.match(/^([a-z-]+):\/\//i)
+  if (scheme) {
+    const sc = scheme[1].toLowerCase()
+    s = s.slice(scheme[0].length).replace(/\/.*$/, '')
+    if (sc === 'ssh' || sc === 'sftp') protocol = 'ssh'
+    else if (sc === 'ftp') protocol = 'ftp'
+    else if (sc === 'ftps' || sc === 'ftpes') {
+      protocol = 'ftp'
+      security = 'explicit'
+    } else if (sc === 'ftps-implicit') {
+      protocol = 'ftp'
+      security = 'implicit'
+    } else return null
+  }
+  const m = s.match(/^(?:([^@\s:]+)(?::([^@\s]*))?@)?(\[[^\]]+\]|[^:\s@/]+)(?::(\d+))?$/)
   if (!m) return null
+  const defPort = protocol === 'ssh' ? 22 : security === 'implicit' ? 990 : 21
+  const username = m[1] ? decodeURIComponent(m[1]) : protocol === 'ftp' ? 'anonymous' : 'root'
   return {
-    username: m[1] || 'root',
-    host: m[2].replace(/^\[|\]$/g, ''),
-    port: m[3] ? Number(m[3]) : 22
+    protocol,
+    ftp: protocol === 'ftp' ? { security, ignoreCert: false, anonymous: username === 'anonymous' } : undefined,
+    username,
+    password: m[2] ? decodeURIComponent(m[2]) : undefined,
+    host: m[3].replace(/^\[|\]$/g, ''),
+    port: m[4] ? Number(m[4]) : defPort
   }
 }
 

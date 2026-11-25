@@ -1,8 +1,24 @@
 export type AuthType = 'password' | 'key' | 'agent'
 
+/** ssh：SSH 终端 + SFTP 文件传输；ftp：仅文件传输（FTP / FTPS） */
+export type Protocol = 'ssh' | 'ftp'
+
+/** FTP 加密方式：none 明文 FTP；explicit 显式 FTPS（AUTH TLS）；implicit 隐式 FTPS（通常 990 端口） */
+export type FtpSecurity = 'none' | 'explicit' | 'implicit'
+
+export interface FtpOptions {
+  security: FtpSecurity
+  /** 跳过 TLS 证书校验（自签名证书时使用） */
+  ignoreCert: boolean
+  /** 匿名登录 */
+  anonymous: boolean
+}
+
 /** 会话配置（渲染进程可见，不含明文密码） */
 export interface SessionInfo {
   id: string
+  protocol: Protocol
+  ftp?: FtpOptions
   name: string
   group: string
   host: string
@@ -20,6 +36,8 @@ export interface SessionInfo {
 /** 保存会话时由渲染进程提交的数据 */
 export interface SessionInput {
   id?: string
+  protocol: Protocol
+  ftp?: FtpOptions
   name: string
   group: string
   host: string
@@ -35,20 +53,25 @@ export interface SessionInput {
 /** 连接参数：要么引用已保存会话，要么临时（快速连接） */
 export interface ConnectRequest {
   sessionId?: string
-  quick?: {
-    host: string
-    port: number
-    username: string
-    password?: string
-  }
+  quick?: QuickTarget
   /** 连接时临时输入的密码（会话未保存密码时） */
   password?: string
   cols: number
   rows: number
 }
 
+export interface QuickTarget {
+  protocol: Protocol
+  ftp?: FtpOptions
+  host: string
+  port: number
+  username: string
+  password?: string
+}
+
 export interface ConnectResult {
   connId: string
+  protocol: Protocol
   title: string
   homeDir: string
 }

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ConnectRequest, ConnectResult, SessionInfo } from '../../shared/types'
+import type { ConnectRequest, ConnectResult, Protocol, QuickTarget, SessionInfo } from '../../shared/types'
 import { emitCommand, startBus } from './bus'
 import { Sidebar } from './components/Sidebar'
 import { SessionDialog } from './components/SessionDialog'
 import { PromptDialog, type PromptOptions } from './components/Modal'
 import { TerminalView, type ConnStatus } from './components/TerminalView'
 import { FilesView } from './components/FilesView'
+import { FtpView } from './components/FtpView'
 import { errMsg, parseQuick, uid } from './util'
 
 type View = 'terminal' | 'files' | 'split'
@@ -13,8 +14,9 @@ type View = 'terminal' | 'files' | 'split'
 interface Tab {
   key: string
   title: string
+  protocol: Protocol
   sessionId?: string
-  quick?: { host: string; port: number; username: string; password?: string }
+  quick?: QuickTarget
   status: ConnStatus
   conn?: ConnectResult
   error?: string
@@ -88,23 +90,60 @@ export default function App() {
 
   const openTab = (tab: Omit<Tab, 'key' | 'status' | 'view'>): void => {
     const key = uid()
-    setTabs((list) => [...list, { ...tab, key, status: 'connecting', view: 'terminal' }])
+    setTabs((list) => [...list, { ...tab, key, status: 'connecting', view: tab.protocol === 'ftp' ? 'files' : 'terminal' }])
     setActiveKey(key)
   }
 
-  const connectSession = (s: SessionInfo): void => openTab({ title: s.name, sessionId: s.id })
+  const connectSession = (s: SessionInfo): void => openTab({ title: s.name, sessionId: s.id, protocol: s.protocol })
 
   const quickConnect = async (text: string): Promise<void> => {
     const q = parseQuick(text)
-    if (!q) return notify('格式不正确，请输入 user@host 或 user@host:port', true)
+    if (!q) return notify('格式不正确。示例：root@1.2.3.4、user@host:2222、ftp://user@host', true)
+    const isFtp = q.protocol === 'ftp'
+    const anonymous = isFtp && q.ftp?.anonymous
+    const kind = isFtp ? (q.ftp?.security === 'none' ? 'FTP' : 'FTPS') : 'SSH'
     const r = await ask({
-      title: `连接 ${q.username}@${q.host}:${q.port}`,
-      label: '密码（留空则使用本机 SSH 密钥 / Agent）',
+      title: `${kind} 连接 ${q.username}@${q.host}:${q.port}`,
+      label: anonymous
+        ? '匿名登录，密码可留空'
+        : isFtp
+          ? '密码'
+          : '密码（留空则使用本机 SSH 密钥 / Agent）',
       password: true,
+      defaultValue: q.password,
+      checkbox: '保存到左侧会话列表（下次双击即可连接）',
       okText: '连接'
     })
     if (r.value === null) return
-    openTab({ title: `${q.username}@${q.host}`, quick: { ...q, password: r.value || undefined } })
+    const password = r.value || undefined
+    if (r.checked) {
+      try {
+        const saved = await window.api.sessions.save({
+          protocol: q.protocol,
+          ftp: q.ftp,
+          name: `${q.username}@${q.host}`,
+          group: '',
+          host: q.host,
+          port: q.port,
+          username: q.username,
+          authType: isFtp || password ? 'password' : 'agent',
+          password
+        })
+        await reload()
+        notify(`已保存会话「${saved.name}」`)
+        connectSessionWith(saved)
+        return
+      } catch (e) {
+        notify(errMsg(e), true)
+      }
+    }
+    openTab({ title: `${q.username}@${q.host}`, protocol: q.protocol, quick: { ...q, password } })
+  }
+
+  /** 刚保存的会话：sessionsRef 可能尚未刷新，先放进去 */
+  const connectSessionWith = (s: SessionInfo): void => {
+    if (!sessionsRef.current.some((x) => x.id === s.id)) sessionsRef.current = [...sessionsRef.current, s]
+    connectSession(s)
   }
 
   /** 每次连接前准备参数：必要时询问密码 */
@@ -131,7 +170,8 @@ export default function App() {
         notify('会话已被删除', true)
         return null
       }
-      if (s.authType === 'password' && (!s.hasPassword || retryAuth)) {
+      const needsPassword = s.protocol === 'ftp' ? !s.ftp?.anonymous : s.authType === 'password'
+      if (needsPassword && (!s.hasPassword || retryAuth)) {
         const r = await ask({
           title: `连接 ${s.name}`,
           label: retryAuth ? `认证失败，请重新输入 ${s.username}@${s.host} 的密码` : `${s.username}@${s.host} 的密码`,
@@ -297,7 +337,7 @@ export default function App() {
           {tabs.length === 0 && (
             <div className="welcome">
               <div className="welcome-logo">SSHub</div>
-              <div className="muted">SSH 终端 · SFTP 文件传输</div>
+              <div className="muted">SSH 终端 · SFTP / FTP 文件传输</div>
               <div className="welcome-actions">
                 <button className="primary" onClick={() => setEditing({})}>
                   新建会话
@@ -316,6 +356,9 @@ export default function App() {
             return (
               <div key={t.key} className={'tab-page view-' + t.view} style={{ display: active ? 'flex' : 'none' }}>
                 <div className="tab-toolbar">
+                  {t.protocol === 'ftp' ? (
+                    <span className="proto-badge ftp">FTP 文件传输</span>
+                  ) : (
                   <div className="segmented small">
                     {(
                       [
@@ -329,6 +372,7 @@ export default function App() {
                       </button>
                     ))}
                   </div>
+                  )}
                   <span className={'status-text ' + t.status}>
                     {t.status === 'connecting' && '连接中…'}
                     {t.status === 'connected' && '已连接'}
@@ -336,6 +380,18 @@ export default function App() {
                     {t.status === 'error' && '连接失败'}
                   </span>
                 </div>
+                {t.protocol === 'ftp' ? (
+                  <div className="tab-content">
+                    <FtpView
+                      active={active}
+                      prepare={getPrepare(t.key)}
+                      notify={notify}
+                      onStatus={(status, conn, error) =>
+                        updateTab(t.key, conn ? { status, conn, error } : { status, error })
+                      }
+                    />
+                  </div>
+                ) : (
                 <div className="tab-content">
                   <div className="term-area" style={{ display: showTerm ? 'flex' : 'none' }}>
                     <TerminalView
@@ -358,6 +414,7 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             )
           })}

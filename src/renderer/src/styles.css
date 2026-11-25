@@ -303,11 +303,101 @@ button.link:hover {
   background: var(--sel);
 }
 .session-icon {
-  color: var(--accent);
-  font-size: 15px;
+  flex: none;
+  width: 30px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 2px 0;
+  border-radius: 4px;
+  color: #cfe0ff;
+  background: rgba(79, 140, 255, 0.22);
+}
+.session-icon.ftp {
+  color: #ffe2a8;
+  background: rgba(229, 181, 75, 0.22);
+}
+.session-text {
+  flex: 1;
+}
+.connect-btn {
+  flex: none;
+  display: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.connect-btn:hover {
+  background: var(--accent-2) !important;
+}
+.session-item:hover .connect-btn,
+.session-item.selected .connect-btn {
+  display: block;
+}
+.session-list:focus {
+  outline: none;
+}
+.proto-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.proto-badge.ftp {
+  color: #ffe2a8;
+  background: rgba(229, 181, 75, 0.16);
+}
+.warn-note {
+  margin-top: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  color: #f3d58a;
+  background: rgba(229, 181, 75, 0.12);
+}
+select.input {
+  appearance: none;
+  padding-right: 24px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+.ftp-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ftp-foot {
+  flex: none;
+  padding: 3px 10px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+  font-size: 12px;
+}
+.ftp-status {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px;
+  text-align: center;
+}
+.error-text {
+  color: var(--danger);
+  max-width: 560px;
+  user-select: text;
 }
 .session-text {
   min-width: 0;
+}
+.empty-hint .small {
+  font-size: 11px;
+  line-height: 1.6;
 }
 .session-name,
 .session-sub {

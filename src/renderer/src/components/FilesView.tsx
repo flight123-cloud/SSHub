@@ -51,8 +51,8 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     async (dir: string): Promise<void> => {
       setRemote((s) => ({ ...s, cwd: dir, loading: true, error: undefined }))
       try {
-        const real = await window.api.sftp.realpath(connId, dir || '.')
-        const entries = await window.api.sftp.list(connId, real)
+        const real = await window.api.remote.realpath(connId, dir || '.')
+        const entries = await window.api.remote.list(connId, real)
         setRemote({ cwd: real, entries, loading: false })
       } catch (e) {
         setRemote({ cwd: dir, entries: [], loading: false, error: errMsg(e) })
@@ -113,7 +113,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '新建文件夹', label: '名称', defaultValue: '新建文件夹' })
     if (!name) return
     try {
-      await window.api.sftp.mkdir(connId, posixJoin(remote.cwd, name))
+      await window.api.remote.mkdir(connId, posixJoin(remote.cwd, name))
       void loadRemote(remote.cwd)
     } catch (e) {
       notify(errMsg(e), true)
@@ -123,7 +123,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '新建文件', label: '文件名', defaultValue: 'untitled.txt' })
     if (!name) return
     try {
-      await window.api.sftp.writeText(connId, posixJoin(remote.cwd, name), '')
+      await window.api.remote.writeText(connId, posixJoin(remote.cwd, name), '')
       void loadRemote(remote.cwd)
     } catch (e) {
       notify(errMsg(e), true)
@@ -133,7 +133,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '重命名', label: '新名称', defaultValue: f.name })
     if (!name || name === f.name) return
     try {
-      await window.api.sftp.rename(connId, f.path, posixJoin(posixParent(f.path), name))
+      await window.api.remote.rename(connId, f.path, posixJoin(posixParent(f.path), name))
       void loadRemote(remote.cwd)
     } catch (e) {
       notify(errMsg(e), true)
@@ -147,7 +147,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     )
     if (!ok) return
     try {
-      await window.api.sftp.remove(connId, list.map((f) => f.path))
+      await window.api.remote.remove(connId, list.map((f) => f.path))
       notify(`已删除 ${list.length} 项`)
     } catch (e) {
       notify(errMsg(e), true)
@@ -160,7 +160,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     if (!v) return
     if (!/^[0-7]{3,4}$/.test(v)) return notify('权限格式不正确', true)
     try {
-      await window.api.sftp.chmod(connId, f.path, parseInt(v, 8))
+      await window.api.remote.chmod(connId, f.path, parseInt(v, 8))
       void loadRemote(remote.cwd)
     } catch (e) {
       notify(errMsg(e), true)
@@ -168,7 +168,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   }
   const remoteEdit = async (f: FileEntry): Promise<void> => {
     try {
-      const content = await window.api.sftp.readText(connId, f.path)
+      const content = await window.api.remote.readText(connId, f.path)
       setEditing({ path: f.path, content })
     } catch (e) {
       notify(errMsg(e), true)
@@ -321,7 +321,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
           path={editing.path}
           initial={editing.content}
           onSave={async (content) => {
-            await window.api.sftp.writeText(connId, editing.path, content)
+            await window.api.remote.writeText(connId, editing.path, content)
             notify('已保存 ' + editing.path)
             void loadRemote(remote.cwd)
           }}

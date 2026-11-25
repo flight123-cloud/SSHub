@@ -2,10 +2,13 @@ import { app, safeStorage } from 'electron'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import type { SessionInfo, SessionInput, AuthType } from '../shared/types'
+import type { SessionInfo, SessionInput, AuthType, Protocol, FtpOptions } from '../shared/types'
 
 interface StoredSession {
   id: string
+  /** 旧版本保存的会话没有该字段，视为 ssh */
+  protocol?: Protocol
+  ftp?: FtpOptions
   name: string
   group: string
   host: string
@@ -75,6 +78,8 @@ function saveAll(list: StoredSession[]): void {
 function toInfo(s: StoredSession): SessionInfo {
   return {
     id: s.id,
+    protocol: s.protocol ?? 'ssh',
+    ftp: s.ftp,
     name: s.name,
     group: s.group,
     host: s.host,
@@ -113,10 +118,12 @@ export const sessionStore = {
       }
       list.push(s)
     }
+    s.protocol = input.protocol
+    s.ftp = input.protocol === 'ftp' ? input.ftp : undefined
     s.name = input.name.trim() || `${input.username}@${input.host}`
     s.group = input.group.trim()
     s.host = input.host.trim()
-    s.port = Number(input.port) || 22
+    s.port = Number(input.port) || (input.protocol === 'ftp' ? 21 : 22)
     s.username = input.username.trim()
     s.authType = input.authType
     s.privateKeyPath = input.privateKeyPath?.trim() || undefined
@@ -152,10 +159,12 @@ export const sessionStore = {
   /** 仅主进程内部使用：取出解密后的凭据 */
   async getSecret(
     id: string
-  ): Promise<(StoredSession & { plainPassword?: string; plainPassphrase?: string }) | undefined> {
+  ): Promise<
+    (StoredSession & { protocol: Protocol; plainPassword?: string; plainPassphrase?: string }) | undefined
+  > {
     const s = loadAll().find((x) => x.id === id)
     if (!s) return undefined
-    return { ...s, plainPassword: await decrypt(s.password), plainPassphrase: await decrypt(s.passphrase) }
+    return { ...s, protocol: s.protocol ?? 'ssh', plainPassword: await decrypt(s.password), plainPassphrase: await decrypt(s.passphrase) }
   }
 }
 

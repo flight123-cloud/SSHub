@@ -61,7 +61,7 @@ export function Sidebar(props: {
       <div className="sidebar-head">
         <input
           className="input full"
-          placeholder="快速连接：user@host:port"
+          placeholder="快速连接：user@host 或 ftp://host"
           value={quick}
           onChange={(e) => setQuick(e.target.value)}
           onKeyDown={(e) => {
@@ -84,14 +84,28 @@ export function Sidebar(props: {
           </button>
         </div>
       </div>
-      <div className="session-list">
+      <div
+        className="session-list"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          const flat = groups.flatMap(([g, l]) => (collapsed[g] ? [] : l))
+          const i = flat.findIndex((x) => x.id === selected)
+          if (e.key === 'Enter' && i >= 0) props.onConnect(flat[i])
+          else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            const n = Math.max(0, Math.min(flat.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+            if (flat[n]) setSelected(flat[n].id)
+          }
+        }}
+      >
         {props.sessions.length === 0 && (
           <div className="empty-hint">
-            还没有会话
+            还没有保存的服务器
             <br />
             <button className="link" onClick={props.onNew}>
-              新建一个
+              新建会话
             </button>
+            <div className="small">保存后会出现在这里，双击即可连接</div>
           </div>
         )}
         {groups.map(([g, list]) => (
@@ -111,16 +125,27 @@ export function Sidebar(props: {
                   onClick={() => setSelected(s.id)}
                   onDoubleClick={() => props.onConnect(s)}
                   onContextMenu={(e) => openMenu(e, s)}
-                  title={`${s.username}@${s.host}:${s.port}\n双击连接`}
+                  title={`${s.protocol === 'ftp' ? 'FTP' : 'SSH'} ${s.username}@${s.host}:${s.port}\n双击或按 Enter 连接`}
                 >
-                  <div className="session-icon">▣</div>
+                  <div className={'session-icon ' + s.protocol}>{s.protocol === 'ftp' ? 'FTP' : 'SSH'}</div>
                   <div className="session-text">
                     <div className="session-name">{s.name}</div>
                     <div className="session-sub">
                       {s.username}@{s.host}
-                      {s.port !== 22 ? `:${s.port}` : ''}
+                      {s.port !== (s.protocol === 'ftp' ? 21 : 22) ? `:${s.port}` : ''}
                     </div>
                   </div>
+                  <button
+                    className="connect-btn"
+                    title="连接"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      props.onConnect(s)
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    连接
+                  </button>
                 </div>
               ))}
           </div>

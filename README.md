@@ -1,19 +1,26 @@
 # SSHub
 
-SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP 文件传输工具，相当于把 Xshell 和 Xftp 合在一个应用里。
+SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，相当于把 Xshell 和 Xftp 合在一个应用里。
 
 <p align="center"><img src="build/icon.png" width="128" alt="SSHub 图标"></p>
 
 ## 功能
 
-- **会话管理**：保存服务器（名称、分组、主机、端口、用户名），支持搜索、复制、编辑、删除
-- **三种登录方式**：密码、私钥（支持带口令的私钥）、系统 SSH Agent
-- **快速连接**：在侧边栏输入 `user@host:port` 回车即可连接
+- **会话管理（左侧列表）**：保存服务器（协议、名称、分组、主机、端口、用户名、密码），下次**双击**、点「连接」按钮或选中后按 **Enter** 即可连接；支持搜索、分组折叠、复制、编辑、删除
+- **两种协议**
+  - **SSH / SFTP**：终端 + 文件传输；登录方式支持密码、私钥（含带口令的私钥）、SSH Agent / 默认密钥
+  - **FTP / FTPS**：文件传输；支持明文 FTP、显式 FTPS（FTP over TLS）、隐式 FTPS、匿名登录，自签名证书可选择跳过校验
+- **快速连接**：在侧边栏输入地址回车即可连接，勾选「保存到左侧会话列表」就能存下来
+  - `root@1.2.3.4`、`user@host:2222`：SSH
+  - `ftp://user@host`、`ftp://host`（匿名）：FTP
+  - `ftps://user@host`：显式 FTPS；`ftps-implicit://user@host`：隐式 FTPS
 - **多标签终端**：基于 xterm.js，支持 256 色、中文、查找（⌘F）、清屏（⌘L）、字体缩放（⌘+ / ⌘-）、链接点击
-- **SFTP 双栏文件管理**：左边本地、右边远程
+- **双栏文件管理（SFTP / FTP 通用）**：左边本地、右边远程
   - 双击文件或用 → / ← 按钮传输，也可以在两栏之间拖拽，或直接从 Finder 拖文件到远程栏上传
   - 支持整个文件夹上传和下载，显示进度和速度，传输可以取消
   - 远程文件可以新建、重命名、删除、修改权限（chmod），也能直接在线编辑文本文件
+  - FTP 连接被服务器空闲断开后，下次操作会自动重连
+  - 部分 FTP 服务器不支持修改权限（SITE CHMOD），这时会提示失败
 - **分屏模式**：终端和文件管理上下同时显示（⌘3）
 - **安全**
   - 密码和口令用 macOS 钥匙串加密后保存在本机
@@ -28,9 +35,9 @@ SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP 文件传输工具，相当
 
    不知道是哪种芯片？点屏幕左上角  →「关于本机」，看「芯片」或「处理器」那一项。
 2. 双击 dmg，把 SSHub 拖进「应用程序」文件夹。
-3. **第一次打开**：这个应用没有经过 Apple 公证，macOS 会提示「无法验证开发者」。可以用下面任一方法解决：
-   - 在「应用程序」里**右键点 SSHub →「打开」→ 再点「打开」**；
-   - 或者到「系统设置 → 隐私与安全性」，在页面下方点「仍要打开」；
+3. **第一次打开**：这个应用没有经过 Apple 公证，macOS 会提示「Apple 无法验证"SSHub"是否包含恶意软件」。可以用下面任一方法解决：
+   - 先点「完成」关掉提示，然后打开「系统设置 → 隐私与安全性」，拉到最下面，在"已阻止 SSHub"旁边点「仍要打开」，再确认一次；
+   - macOS 14 及更早版本也可以在「应用程序」里**右键点 SSHub →「打开」→ 再点「打开」**；
    - 如果提示「已损坏，无法打开」，在「终端」里执行下面这条命令，然后再打开：
 
      ```bash
@@ -55,11 +62,11 @@ SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP 文件传输工具，相当
 ## 数据存放位置
 
 - 会话：`~/Library/Application Support/SSHub/sessions.json`（密码是加密后保存的）
-- 已信任的主机指纹：`~/Library/Application Support/SSHub/known_hosts.json`
+- 已信任的 SSH 主机指纹：`~/Library/Application Support/SSHub/known_hosts.json`
 
 ## 开发
 
-技术栈：Electron + React + TypeScript；SSH/SFTP 用 [ssh2](https://github.com/mscdex/ssh2)，终端用 [xterm.js](https://xtermjs.org/)，打包用 electron-builder。
+技术栈：Electron + React + TypeScript；SSH/SFTP 用 [ssh2](https://github.com/mscdex/ssh2)，FTP/FTPS 用 [basic-ftp](https://github.com/patrickjuchli/basic-ftp)，终端用 [xterm.js](https://xtermjs.org/)，打包用 electron-builder。
 
 ```bash
 npm install
@@ -72,7 +79,13 @@ npm run dist:mac   # 打包 macOS dmg（需要在 Mac 上执行）
 
 ```
 src/
-  main/       主进程：SSH 连接、SFTP、传输队列、会话存储
+  main/       主进程
+    ssh.ts          SSH 连接与终端
+    ftp.ts          FTP / FTPS 连接
+    sftpfs.ts       SFTP 文件操作
+    ftpfs.ts        FTP 文件操作
+    connections.ts  连接管理与传输队列（两种协议共用）
+    store.ts        会话存储（密码加密）
   preload/    安全桥接（contextBridge）
   renderer/   界面（React）
   shared/     共享类型
