@@ -4,14 +4,15 @@ import { createHash } from 'crypto'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import type { ConnectRequest, ConnectResult } from '../shared/types'
+import type { ConnectRequest, ConnectResult, Encoding } from '../shared/types'
+import { encode, streamDecoder } from './encoding'
 import { knownHosts, sessionStore } from './store'
 import { friendlyError } from './errors'
 import { SftpFs } from './sftpfs'
 import { getMainWindow, markClosed, register, send, get } from './connections'
 
-/** 每个 SSH 连接的交互式 Shell */
-const shells = new Map<string, ClientChannel>()
+/** 每个 SSH 连接的交互式 Shell 及其字符编码 */
+const shells = new Map<string, { ch: ClientChannel; enc: Encoding }>()
 
 /** ~/.ssh 下第一个可读的默认私钥 */
 function defaultPrivateKey(): Buffer | undefined {
@@ -68,7 +69,9 @@ function makeHostVerifier(hostPort: string) {
   }
 }
 
-async function buildConfig(req: ConnectRequest): Promise<{ cfg: ConnectConfig; title: string; password?: string }> {
+async function buildConfig(
+  req: ConnectRequest
+): Promise<{ cfg: ConnectConfig; title: string; password?: string; encoding: Encoding }> {
   if (req.sessionId) {
     const s = await sessionStore.getSecret(req.sessionId)
     if (!s) throw new Error('会话不存在')
@@ -104,7 +107,7 @@ async function buildConfig(req: ConnectRequest): Promise<{ cfg: ConnectConfig; t
         throw new Error('未找到可用的密钥：SSH Agent 未运行，~/.ssh 下也没有 id_ed25519 / id_ecdsa / id_rsa')
     }
     sessionStore.touch(s.id)
-    return { cfg, title: s.name, password }
+    return { cfg, title: s.name, password, encoding: s.encoding ?? 'utf8' }
   }
   if (req.quick) {
     const q = req.quick
@@ -125,13 +128,13 @@ async function buildConfig(req: ConnectRequest): Promise<{ cfg: ConnectConfig; t
       const key = defaultPrivateKey()
       if (key) cfg.privateKey = key
     }
-    return { cfg, title: `${q.username}@${q.host}`, password: q.password }
+    return { cfg, title: `${q.username}@${q.host}`, password: q.password, encoding: q.encoding ?? 'utf8' }
   }
   throw new Error('缺少连接参数')
 }
 
 export async function connect(req: ConnectRequest): Promise<ConnectResult> {
-  const { cfg, title, password } = await buildConfig(req)
+  const { cfg, title, password, encoding } = await buildConfig(req)
   const client = new Client()
 
   client.on('keyboard-interactive', (_name, _instr, _lang, prompts, finish) => {
@@ -170,6 +173,7 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
     protocol: 'ssh',
     title,
     homeDir: '/',
+    encoding,
     fs: sftpFs,
     xfer: new SftpFs(client),
     end: () => client.end()
@@ -188,13 +192,26 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
   const shell = await new Promise<ClientChannel>((resolve, reject) => {
     client.shell(
       { term: 'xterm-256color', cols: req.cols || 80, rows: req.rows || 24 },
-      { env: { LANG: process.env.LANG || 'en_US.UTF-8', LC_CTYPE: 'UTF-8' } },
+      {
+        env:
+          encoding === 'utf8'
+            ? { LANG: 'en_US.UTF-8', LC_CTYPE: 'UTF-8' }
+            : { LANG: encoding === 'gbk' ? 'zh_CN.GBK' : 'zh_TW.Big5' }
+      },
       (err, stream) => (err ? reject(new Error(friendlyError(err))) : resolve(stream))
     )
   })
-  shells.set(id, shell)
-  shell.on('data', (d: Buffer) => send('ssh:data', id, new Uint8Array(d)))
-  shell.stderr.on('data', (d: Buffer) => send('ssh:data', id, new Uint8Array(d)))
+  shells.set(id, { ch: shell, enc: encoding })
+  if (encoding === 'utf8') {
+    // UTF-8 直接传字节，xterm 自己解码
+    shell.on('data', (d: Buffer) => send('ssh:data', id, new Uint8Array(d)))
+    shell.stderr.on('data', (d: Buffer) => send('ssh:data', id, new Uint8Array(d)))
+  } else {
+    const out = streamDecoder(encoding)
+    const err = streamDecoder(encoding)
+    shell.on('data', (d: Buffer) => send('ssh:data', id, out.write(d)))
+    shell.stderr.on('data', (d: Buffer) => send('ssh:data', id, err.write(d)))
+  }
   shell.on('close', () => client.end())
 
   // 预先获取远程 home 目录
@@ -204,14 +221,16 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
     /* 部分服务器不支持 SFTP，忽略 */
   }
 
-  return { connId: id, protocol: 'ssh', title, homeDir: conn.homeDir }
+  return { connId: id, protocol: 'ssh', encoding, title, homeDir: conn.homeDir }
 }
 
 export function write(connId: string, data: string): void {
-  shells.get(connId)?.write(data)
+  const sh = shells.get(connId)
+  if (!sh) return
+  sh.ch.write(sh.enc === 'utf8' ? data : encode(data, sh.enc))
 }
 
 export function resize(connId: string, cols: number, rows: number): void {
   const sh = shells.get(connId)
-  if (sh && cols > 0 && rows > 0) sh.setWindow(rows, cols, 0, 0)
+  if (sh && cols > 0 && rows > 0) sh.ch.setWindow(rows, cols, 0, 0)
 }

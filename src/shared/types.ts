@@ -6,6 +6,15 @@ export type Protocol = 'ssh' | 'ftp'
 /** FTP 加密方式：none 明文 FTP；explicit 显式 FTPS（AUTH TLS）；implicit 隐式 FTPS（通常 990 端口） */
 export type FtpSecurity = 'none' | 'explicit' | 'implicit'
 
+/** 服务器字符编码：影响终端显示、FTP 文件名和在线编辑的文件内容 */
+export type Encoding = 'utf8' | 'gbk' | 'big5'
+
+export const ENCODING_LABELS: Record<Encoding, string> = {
+  utf8: 'UTF-8',
+  gbk: 'GBK / GB18030（简体中文）',
+  big5: 'Big5（繁体中文）'
+}
+
 export interface FtpOptions {
   security: FtpSecurity
   /** 跳过 TLS 证书校验（自签名证书时使用） */
@@ -19,6 +28,8 @@ export interface SessionInfo {
   id: string
   protocol: Protocol
   ftp?: FtpOptions
+  /** 默认 utf8 */
+  encoding?: Encoding
   name: string
   group: string
   host: string
@@ -38,6 +49,8 @@ export interface SessionInput {
   id?: string
   protocol: Protocol
   ftp?: FtpOptions
+  /** 默认 utf8 */
+  encoding?: Encoding
   name: string
   group: string
   host: string
@@ -63,6 +76,7 @@ export interface ConnectRequest {
 export interface QuickTarget {
   protocol: Protocol
   ftp?: FtpOptions
+  encoding?: Encoding
   host: string
   port: number
   username: string
@@ -72,6 +86,7 @@ export interface QuickTarget {
 export interface ConnectResult {
   connId: string
   protocol: Protocol
+  encoding: Encoding
   title: string
   homeDir: string
 }
@@ -110,5 +125,25 @@ export interface TransferItem {
 export interface ApiResult<T> {
   ok: boolean
   data?: T
+  error?: string
+}
+
+/** 在线编辑：打开的文本文件 */
+export interface TextFile {
+  text: string
+  /** 实际使用的编码 */
+  encoding: Encoding
+  /** 是否带 UTF-8 BOM */
+  bom: boolean
+  /** 换行符 */
+  eol: 'lf' | 'crlf'
+  size: number
+}
+
+/** 用本地应用打开的远程文件，保存后自动上传的结果 */
+export interface ExternalEditEvent {
+  connId: string
+  remotePath: string
+  status: 'opened' | 'synced' | 'error'
   error?: string
 }

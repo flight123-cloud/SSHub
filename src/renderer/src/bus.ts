@@ -1,6 +1,6 @@
 import type { TransferItem } from '../../shared/types'
 
-type DataFn = (data: Uint8Array) => void
+type DataFn = (data: Uint8Array | string) => void
 type VoidFn = () => void
 type ErrFn = (msg: string) => void
 
@@ -9,7 +9,7 @@ const closeHandlers = new Map<string, VoidFn>()
 const errorHandlers = new Map<string, ErrFn>()
 const transferListeners = new Set<(t: TransferItem) => void>()
 /** 在终端注册前到达的数据先缓存 */
-const pending = new Map<string, Uint8Array[]>()
+const pending = new Map<string, (Uint8Array | string)[]>()
 
 let started = false
 export function startBus(): void {

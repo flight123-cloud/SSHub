@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AuthType, FtpSecurity, Protocol, SessionInfo, SessionInput } from '../../../shared/types'
+import { ENCODING_LABELS, type AuthType, type Encoding, type FtpSecurity, type Protocol, type SessionInfo, type SessionInput } from '../../../shared/types'
 import { Modal } from './Modal'
 import { errMsg } from '../util'
 
@@ -14,6 +14,7 @@ export function SessionDialog(props: {
   const [security, setSecurity] = useState<FtpSecurity>(s?.ftp?.security ?? 'none')
   const [ignoreCert, setIgnoreCert] = useState(s?.ftp?.ignoreCert ?? false)
   const [anonymous, setAnonymous] = useState(s?.ftp?.anonymous ?? false)
+  const [encoding, setEncoding] = useState<Encoding>(s?.encoding ?? 'utf8')
   const [name, setName] = useState(s?.name ?? '')
   const [group, setGroup] = useState(s?.group ?? '')
   const [host, setHost] = useState(s?.host ?? '')
@@ -50,6 +51,7 @@ export function SessionDialog(props: {
       id: s?.id,
       protocol,
       ftp: isFtp ? { security, ignoreCert, anonymous } : undefined,
+      encoding,
       name,
       group,
       host,
@@ -224,6 +226,22 @@ export function SessionDialog(props: {
             />
           </>
         )}
+
+        <label>编码</label>
+        <div>
+          <select className="input full" value={encoding} onChange={(e) => setEncoding(e.target.value as Encoding)}>
+            {(Object.keys(ENCODING_LABELS) as Encoding[]).map((k) => (
+              <option key={k} value={k}>
+                {ENCODING_LABELS[k]}
+              </option>
+            ))}
+          </select>
+          <div className="muted small field-hint">
+            {isFtp
+              ? '服务器上中文文件名显示为乱码时，改为 GBK（常见于 Windows 和较老的 FTP 服务器）。'
+              : '终端中文显示为乱码时，改为与服务器一致的编码（服务器 locale 为 zh_CN.GBK 时选 GBK）。SFTP 文件名始终按 UTF-8 处理。'}
+          </div>
+        </div>
 
         {!isFtp && authType === 'agent' && (
           <>

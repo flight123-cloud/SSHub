@@ -228,7 +228,9 @@ export default function App() {
             setTimeout(() => (document.querySelector('[data-quick-connect]') as HTMLInputElement | null)?.focus(), 50)
             break
           case 'close-tab':
-            if (active) void closeTab(active.key)
+            // 打开了编辑器时，⌘W 只关闭编辑器
+            if (document.querySelector('.modal.editor')) emitCommand('close-editor')
+            else if (active) void closeTab(active.key)
             break
           case 'view-terminal':
           case 'view-files':

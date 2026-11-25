@@ -20,7 +20,8 @@ async function buildConfig(req: ConnectRequest): Promise<{ cfg: FtpConfig; title
         user: o.anonymous ? 'anonymous' : s.username,
         password: o.anonymous ? 'anonymous@' : (req.password ?? s.plainPassword ?? ''),
         security: o.security,
-        ignoreCert: o.ignoreCert
+        ignoreCert: o.ignoreCert,
+        encoding: s.encoding ?? 'utf8'
       }
     }
   }
@@ -36,7 +37,8 @@ async function buildConfig(req: ConnectRequest): Promise<{ cfg: FtpConfig; title
         user: anonymous ? 'anonymous' : q.username,
         password: anonymous ? 'anonymous@' : (q.password ?? ''),
         security: o.security,
-        ignoreCert: o.ignoreCert
+        ignoreCert: o.ignoreCert,
+        encoding: q.encoding ?? 'utf8'
       }
     }
   }
@@ -54,8 +56,9 @@ export async function connect(req: ConnectRequest): Promise<ConnectResult> {
     title,
     homeDir,
     fs: browse,
+    encoding: cfg.encoding,
     xfer: new FtpFs(cfg),
     end: () => browse.close()
   })
-  return { connId: conn.id, protocol: 'ftp', title, homeDir }
+  return { connId: conn.id, protocol: 'ftp', encoding: cfg.encoding, title, homeDir }
 }

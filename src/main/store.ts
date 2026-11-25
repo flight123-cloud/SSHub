@@ -2,13 +2,14 @@ import { app, safeStorage } from 'electron'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import type { SessionInfo, SessionInput, AuthType, Protocol, FtpOptions } from '../shared/types'
+import type { SessionInfo, SessionInput, AuthType, Protocol, FtpOptions, Encoding } from '../shared/types'
 
 interface StoredSession {
   id: string
   /** 旧版本保存的会话没有该字段，视为 ssh */
   protocol?: Protocol
   ftp?: FtpOptions
+  encoding?: Encoding
   name: string
   group: string
   host: string
@@ -80,6 +81,7 @@ function toInfo(s: StoredSession): SessionInfo {
     id: s.id,
     protocol: s.protocol ?? 'ssh',
     ftp: s.ftp,
+    encoding: s.encoding ?? 'utf8',
     name: s.name,
     group: s.group,
     host: s.host,
@@ -120,6 +122,7 @@ export const sessionStore = {
     }
     s.protocol = input.protocol
     s.ftp = input.protocol === 'ftp' ? input.ftp : undefined
+    s.encoding = input.encoding && input.encoding !== 'utf8' ? input.encoding : undefined
     s.name = input.name.trim() || `${input.username}@${input.host}`
     s.group = input.group.trim()
     s.host = input.host.trim()

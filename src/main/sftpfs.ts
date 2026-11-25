@@ -2,7 +2,7 @@ import type { Client, FileEntryWithStats, SFTPWrapper } from 'ssh2'
 import path from 'path'
 import type { FileEntry } from '../shared/types'
 import { friendlyError } from './errors'
-import { permString, type RemoteFs, type RemoteStat } from './remotefs'
+import { copyViaReadWrite, permString, type RemoteFs, type RemoteStat } from './remotefs'
 
 const S_IFMT = 0o170000
 const S_IFDIR = 0o040000
@@ -114,6 +114,25 @@ export class SftpFs implements RemoteFs {
   async chmod(p: string, mode: number): Promise<void> {
     const sftp = await this.get()
     await call<void>((cb) => sftp.chmod(p, mode, cb))
+  }
+
+  /** 优先在服务器上执行 cp -a（快、保留权限）；不能执行命令时退回逐个读写 */
+  async copy(src: string, dest: string): Promise<void> {
+    const q = (s: string): string => "'" + s.replace(/'/g, "'\\''") + "'"
+    const ok = await new Promise<boolean | string>((resolve) => {
+      this.client.exec(`cp -a -- ${q(src)} ${q(dest)}`, (err, ch) => {
+        if (err) return resolve(false)
+        let stderr = ''
+        ch.stderr.on('data', (d: Buffer) => (stderr += d.toString()))
+        ch.on('data', () => undefined)
+        ch.on('close', (code: number | null) => resolve(code === 0 ? true : stderr.trim() || false))
+      })
+    })
+    if (ok === true) return
+    if (typeof ok === 'string' && !/not found|No such file or directory.*cp|command not found/i.test(ok)) {
+      throw new Error('复制失败：' + ok)
+    }
+    await copyViaReadWrite(this, src, dest)
   }
 
   async readFile(p: string): Promise<Buffer> {

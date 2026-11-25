@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, clipboard } from 'electron'
 import path from 'path'
-import type { ApiResult } from '../shared/types'
+import type { ApiResult, Encoding } from '../shared/types'
 import * as ssh from './ssh'
 import * as ftp from './ftp'
 import * as conns from './connections'
 import { friendlyError } from './errors'
+import { openExternal } from './externalEdit'
 import { localfs } from './localfs'
 import { sessionStore } from './store'
 
@@ -168,8 +169,12 @@ function registerIpc(): void {
   handle('remote:rename', (id: string, a: string, b: string) => conns.remote.rename(id, a, b))
   handle('remote:delete', (id: string, paths: string[]) => conns.remote.remove(id, paths))
   handle('remote:chmod', (id: string, p: string, mode: number) => conns.remote.chmod(id, p, mode))
-  handle('remote:readText', (id: string, p: string) => conns.remote.readText(id, p))
-  handle('remote:writeText', (id: string, p: string, c: string) => conns.remote.writeText(id, p, c))
+  handle('remote:copy', (id: string, a: string, b: string) => conns.remote.copy(id, a, b))
+  handle('remote:openText', (id: string, p: string, enc?: Encoding) => conns.remote.openText(id, p, enc))
+  handle('remote:saveText', (id: string, p: string, text: string, enc: Encoding, bom: boolean) =>
+    conns.remote.saveText(id, p, text, enc, bom)
+  )
+  handle('remote:openExternal', (id: string, p: string) => openExternal(id, p))
   handle('transfer:enqueue', (id: string, dir: 'upload' | 'download', src: string[], dest: string) =>
     conns.enqueueTransfer(id, dir, src, dest)
   )
@@ -183,6 +188,7 @@ function registerIpc(): void {
   handle('local:trash', (paths: string[]) => localfs.trash(paths))
   handle('local:reveal', (p: string) => localfs.reveal(p))
   handle('local:open', (p: string) => localfs.open(p))
+  handle('local:createFile', (p: string) => localfs.createFile(p))
 
   // 杂项
   handle('dialog:pickFile', async (title: string) => {

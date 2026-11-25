@@ -3,7 +3,10 @@ import type {
   ApiResult,
   ConnectRequest,
   ConnectResult,
+  Encoding,
+  ExternalEditEvent,
   FileEntry,
+  TextFile,
   SessionInfo,
   SessionInput,
   TransferItem
@@ -36,7 +39,7 @@ const api = {
     write: (id: string, data: string) => ipcRenderer.send('ssh:write', id, data),
     resize: (id: string, cols: number, rows: number) => ipcRenderer.send('ssh:resize', id, cols, rows),
     disconnect: (id: string) => call<void>('conn:disconnect', id),
-    onData: (cb: (id: string, data: Uint8Array) => void) => on('ssh:data', cb),
+    onData: (cb: (id: string, data: Uint8Array | string) => void) => on('ssh:data', cb),
     onClosed: (cb: (id: string) => void) => on('ssh:closed', cb),
     onError: (cb: (id: string, msg: string) => void) => on('ssh:error', cb)
   },
@@ -54,8 +57,13 @@ const api = {
     rename: (id: string, a: string, b: string) => call<void>('remote:rename', id, a, b),
     remove: (id: string, paths: string[]) => call<void>('remote:delete', id, paths),
     chmod: (id: string, p: string, mode: number) => call<void>('remote:chmod', id, p, mode),
-    readText: (id: string, p: string) => call<string>('remote:readText', id, p),
-    writeText: (id: string, p: string, content: string) => call<void>('remote:writeText', id, p, content)
+    copy: (id: string, src: string, dest: string) => call<void>('remote:copy', id, src, dest),
+    openText: (id: string, p: string, encoding?: Encoding) => call<TextFile>('remote:openText', id, p, encoding),
+    saveText: (id: string, p: string, text: string, encoding: Encoding, bom: boolean) =>
+      call<void>('remote:saveText', id, p, text, encoding, bom),
+    /** 下载到临时目录并用系统默认应用打开，保存后自动上传 */
+    openExternal: (id: string, p: string) => call<void>('remote:openExternal', id, p),
+    onEditEvent: (cb: (e: ExternalEditEvent) => void) => on('edit:event', cb)
   },
 
   transfer: {
@@ -73,6 +81,7 @@ const api = {
     trash: (paths: string[]) => call<void>('local:trash', paths),
     reveal: (p: string) => call<void>('local:reveal', p),
     open: (p: string) => call<void>('local:open', p),
+    createFile: (p: string) => call<void>('local:createFile', p),
     /** 拖入文件的本地绝对路径 */
     pathForFile: (f: File) => webUtils.getPathForFile(f)
   },

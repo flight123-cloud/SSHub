@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileEntry, TransferItem } from '../../../shared/types'
 import { onTransfer } from '../bus'
-import { errMsg, posixJoin, posixParent } from '../util'
+import { errMsg, isTextFile, posixJoin, posixParent } from '../util'
 import type { MenuItem } from './ContextMenu'
 import { FilePane, type Side } from './FilePane'
 import { PromptDialog, type PromptOptions } from './Modal'
 import { TransferList } from './TransferList'
-import { TextEditor } from './TextEditor'
+import { CodeEditor } from './CodeEditor'
 
 interface PaneState {
   cwd: string
@@ -25,7 +25,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   const [showHidden, setShowHidden] = useState(false)
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [prompt, setPrompt] = useState<{ opts: PromptOptions; resolve: (v: string | null) => void } | null>(null)
-  const [editing, setEditing] = useState<{ path: string; content: string } | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
   const [localSel, setLocalSel] = useState<FileEntry[]>([])
   const [remoteSel, setRemoteSel] = useState<FileEntry[]>([])
   const localRef = useRef(local)
@@ -91,6 +91,21 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     [connId]
   )
 
+  // 「用本地应用打开」的文件保存后自动上传
+  useEffect(
+    () =>
+      window.api.remote.onEditEvent((e) => {
+        if (e.connId !== connId) return
+        const name = e.remotePath.split('/').pop()
+        if (e.status === 'synced') {
+          notify(`已自动上传 ${name} 到服务器`)
+          if (posixParent(e.remotePath) === remoteRef.current.cwd) void loadRemote(remoteRef.current.cwd)
+        } else if (e.status === 'opened') notify(`已用本地应用打开 ${name}，保存后会自动上传到服务器`)
+        else notify(`${name} 自动上传失败：${e.error}`, true)
+      }),
+    [connId]
+  )
+
   const upload = async (paths: string[], targetDir?: string): Promise<void> => {
     if (!paths.length) return
     try {
@@ -123,8 +138,11 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '新建文件', label: '文件名', defaultValue: 'untitled.txt' })
     if (!name) return
     try {
-      await window.api.remote.writeText(connId, posixJoin(remote.cwd, name), '')
+      const p = posixJoin(remote.cwd, name)
+      if (remote.entries.some((f) => f.name === name)) return notify(`「${name}」已存在`, true)
+      await window.api.remote.saveText(connId, p, '', 'utf8', false)
       void loadRemote(remote.cwd)
+      setEditing(p)
     } catch (e) {
       notify(errMsg(e), true)
     }
@@ -166,31 +184,78 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
       notify(errMsg(e), true)
     }
   }
-  const remoteEdit = async (f: FileEntry): Promise<void> => {
+  const remoteEdit = (f: FileEntry): void => setEditing(f.path)
+  const remoteOpenExternal = async (f: FileEntry): Promise<void> => {
     try {
-      const content = await window.api.remote.readText(connId, f.path)
-      setEditing({ path: f.path, content })
+      await window.api.remote.openExternal(connId, f.path)
     } catch (e) {
       notify(errMsg(e), true)
     }
+  }
+  /** 在服务器上创建副本：a.txt → a_copy.txt */
+  const remoteDuplicate = async (f: FileEntry): Promise<void> => {
+    const dot = f.isDir ? -1 : f.name.lastIndexOf('.')
+    const def = dot > 0 ? f.name.slice(0, dot) + '_copy' + f.name.slice(dot) : f.name + '_copy'
+    const name = await ask({ title: '创建副本', label: '副本名称', defaultValue: def })
+    if (!name || name === f.name) return
+    try {
+      await window.api.remote.copy(connId, f.path, posixJoin(posixParent(f.path), name))
+      notify(`已创建副本 ${name}`)
+      void loadRemote(remote.cwd)
+    } catch (e) {
+      notify(errMsg(e), true)
+    }
+  }
+  /** 移动到另一个远程目录（可以是相对当前目录的路径） */
+  const remoteMoveTo = async (list: FileEntry[]): Promise<void> => {
+    const dir = await ask({ title: `移动 ${list.length} 项到…`, label: '目标文件夹（绝对路径，或相对当前目录）', defaultValue: remote.cwd })
+    if (!dir) return
+    const target = dir.startsWith('/') ? dir : posixJoin(remote.cwd, dir)
+    await remoteMove(list.map((f) => f.path), target)
+  }
+  const remoteMove = async (paths: string[], targetDir: string): Promise<void> => {
+    let moved = 0
+    for (const p of paths) {
+      const dest = posixJoin(targetDir, p.split('/').pop()!)
+      if (dest === p || targetDir === p || targetDir.startsWith(p + '/')) continue
+      try {
+        await window.api.remote.rename(connId, p, dest)
+        moved++
+      } catch (e) {
+        notify(errMsg(e), true)
+      }
+    }
+    if (moved) notify(`已移动 ${moved} 项到 ${targetDir}`)
+    void loadRemote(remote.cwd)
+  }
+  /** 双击远程文件：文本文件直接在线编辑，其它文件下载 */
+  const remoteOpen = (f: FileEntry): void => {
+    if (f.isDir) void loadRemote(f.path)
+    else if (isTextFile(f.name, f.size)) remoteEdit(f)
+    else void download([f.path])
   }
 
   const remoteMenu = (sel: FileEntry[]): MenuItem[] => {
     const one = sel.length === 1 ? sel[0] : null
     const items: MenuItem[] = []
     if (sel.length) {
-      items.push({ label: `下载到本地（${sel.length} 项）`, onClick: () => void download(sel.map((s) => s.path)) })
-      if (one && !one.isDir) items.push({ label: '编辑', onClick: () => void remoteEdit(one) })
+      if (one && !one.isDir) {
+        items.push({ label: '编辑（内置编辑器）', onClick: () => remoteEdit(one) })
+        items.push({ label: '用本地应用打开（保存后自动上传）', onClick: () => void remoteOpenExternal(one) })
+      }
       if (one?.isDir) items.push({ label: '打开', onClick: () => void loadRemote(one.path) })
+      items.push({ label: `下载到本地（${sel.length} 项）`, onClick: () => void download(sel.map((s) => s.path)) })
       items.push({ type: 'separator' })
       if (one) items.push({ label: '重命名…', onClick: () => void remoteRename(one) })
+      if (one) items.push({ label: '创建副本…', onClick: () => void remoteDuplicate(one) })
+      items.push({ label: '移动到…', onClick: () => void remoteMoveTo(sel) })
       if (one) items.push({ label: '修改权限…', onClick: () => void remoteChmod(one) })
       items.push({ label: '复制路径', onClick: () => void window.api.ui.copyText(sel.map((s) => s.path).join('\n')) })
       items.push({ label: '删除', danger: true, onClick: () => void remoteDelete(sel) })
       items.push({ type: 'separator' })
     }
-    items.push({ label: '新建文件夹…', onClick: () => void remoteMkdir() })
     items.push({ label: '新建文件…', onClick: () => void remoteNewFile() })
+    items.push({ label: '新建文件夹…', onClick: () => void remoteMkdir() })
     items.push({ label: '刷新', onClick: () => void loadRemote(remote.cwd) })
     return items
   }
@@ -205,6 +270,28 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     } catch (e) {
       notify(errMsg(e), true)
     }
+  }
+  const localNewFile = async (): Promise<void> => {
+    const name = await ask({ title: '新建文件', label: '文件名', defaultValue: 'untitled.txt' })
+    if (!name) return
+    try {
+      await window.api.local.createFile(posixJoin(local.cwd, name))
+      void loadLocal(local.cwd)
+    } catch (e) {
+      notify(/EEXIST/.test(errMsg(e)) ? `「${name}」已存在` : errMsg(e), true)
+    }
+  }
+  const localMove = async (paths: string[], targetDir: string): Promise<void> => {
+    for (const p of paths) {
+      const dest = posixJoin(targetDir, p.split('/').pop()!)
+      if (dest === p || targetDir === p || targetDir.startsWith(p + '/')) continue
+      try {
+        await window.api.local.rename(p, dest)
+      } catch (e) {
+        notify(errMsg(e), true)
+      }
+    }
+    void loadLocal(local.cwd)
   }
   const localRename = async (f: FileEntry): Promise<void> => {
     const name = await ask({ title: '重命名', label: '新名称', defaultValue: f.name })
@@ -241,6 +328,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
       items.push({ label: '移到废纸篓', danger: true, onClick: () => void localTrash(sel) })
       items.push({ type: 'separator' })
     }
+    items.push({ label: '新建文件…', onClick: () => void localNewFile() })
     items.push({ label: '新建文件夹…', onClick: () => void localMkdir() })
     items.push({ label: '在 Finder 中打开当前目录', onClick: () => void window.api.local.open(local.cwd) })
     items.push({ label: '刷新', onClick: () => void loadLocal(local.cwd) })
@@ -250,6 +338,9 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   const onDrop = (to: Side) => (from: Side | 'finder', paths: string[], targetDir?: string) => {
     if (to === 'remote' && from !== 'remote') void upload(paths, targetDir)
     else if (to === 'local' && from === 'remote') void download(paths, targetDir)
+    // 同一侧拖到文件夹上：移动
+    else if (to === 'remote' && from === 'remote' && targetDir) void remoteMove(paths, targetDir)
+    else if (to === 'local' && from === 'local' && targetDir) void localMove(paths, targetDir)
   }
 
   return (
@@ -295,7 +386,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
           onUp={() => void loadRemote(posixParent(remote.cwd))}
           onHome={() => void loadRemote(props.homeDir)}
           onRefresh={() => void loadRemote(remote.cwd)}
-          onOpen={(f) => (f.isDir ? void loadRemote(f.path) : void download([f.path]))}
+          onOpen={remoteOpen}
           onDropFiles={onDrop('remote')}
           buildMenu={remoteMenu}
           onSelectionChange={setRemoteSel}
@@ -317,14 +408,12 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
         />
       )}
       {editing && (
-        <TextEditor
-          path={editing.path}
-          initial={editing.content}
-          onSave={async (content) => {
-            await window.api.remote.writeText(connId, editing.path, content)
-            notify('已保存 ' + editing.path)
-            void loadRemote(remote.cwd)
-          }}
+        <CodeEditor
+          key={editing}
+          connId={connId}
+          path={editing}
+          notify={notify}
+          onSaved={() => void loadRemote(remoteRef.current.cwd)}
           onClose={() => setEditing(null)}
         />
       )}

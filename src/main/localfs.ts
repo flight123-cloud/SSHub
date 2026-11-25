@@ -48,6 +48,11 @@ export const localfs = {
     await fs.promises.mkdir(p)
   },
 
+  /** 新建空文件（已存在时报错，不覆盖） */
+  async createFile(p: string): Promise<void> {
+    await fs.promises.writeFile(p, '', { flag: 'wx' })
+  },
+
   async rename(from: string, to: string): Promise<void> {
     await fs.promises.rename(from, to)
   },

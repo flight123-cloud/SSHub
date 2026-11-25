@@ -2,7 +2,8 @@ import { BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import type { FileEntry, Protocol, TransferDirection, TransferItem } from '../shared/types'
+import type { Encoding, FileEntry, Protocol, TextFile, TransferDirection, TransferItem } from '../shared/types'
+import { decode, encode, isValidUtf8, looksBinary } from './encoding'
 import { friendlyError } from './errors'
 import type { RemoteFs } from './remotefs'
 
@@ -12,6 +13,8 @@ export interface Conn {
   protocol: Protocol
   title: string
   homeDir: string
+  /** 服务器字符编码（终端、FTP 文件名、文本文件默认编码） */
+  encoding: Encoding
   closed: boolean
   /** 浏览 / 文件操作用 */
   fs: RemoteFs
@@ -42,10 +45,16 @@ export function register(c: Omit<Conn, 'id' | 'closed' | 'queue'>): Conn {
   return conn
 }
 
+const closeListeners: ((connId: string) => void)[] = []
+export function onConnectionClosed(l: (connId: string) => void): void {
+  closeListeners.push(l)
+}
+
 /** 连接已断开：标记、终止排队中的传输并移除 */
 export function markClosed(conn: Conn): void {
   if (conn.closed) return
   conn.closed = true
+  closeListeners.forEach((l) => l(conn.id))
   for (const t of conn.queue) {
     if (t.status === 'queued' || t.status === 'running') {
       t.status = 'error'
@@ -99,15 +108,43 @@ export const remote = {
     const f = need(id).fs
     for (const p of paths) await f.remove(p)
   },
-  async readText(id: string, p: string): Promise<string> {
-    const f = need(id).fs
-    const st = await f.stat(p)
-    if (st.size > 5 * 1024 * 1024) throw new Error('文件超过 5MB，请下载后编辑')
-    return (await f.readFile(p)).toString('utf8')
+  copy: (id: string, src: string, dest: string): Promise<void> => need(id).fs.copy(src, dest),
+
+  /**
+   * 打开文本文件：自动识别编码（合法 UTF-8 → UTF-8，否则用会话编码，会话是 UTF-8 时再试 GBK），
+   * 保留 BOM 与换行符风格；疑似二进制文件拒绝打开。
+   */
+  async openText(id: string, p: string, want?: Encoding): Promise<TextFile> {
+    const c = need(id)
+    const st = await c.fs.stat(p)
+    if (st.isDir) throw new Error('这是一个文件夹')
+    if (st.size > MAX_EDIT_SIZE) throw new Error('文件超过 10MB，请下载后编辑或「用本地应用打开」')
+    let buf = await c.fs.readFile(p)
+    if (looksBinary(buf)) throw new Error('这看起来是二进制文件，不能用文本编辑器打开。可以右键选择「用本地应用打开」')
+    let bom = false
+    if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+      bom = true
+      buf = buf.subarray(3)
+    }
+    let encoding: Encoding
+    if (want) encoding = want
+    else if (bom || isValidUtf8(buf)) encoding = 'utf8'
+    else encoding = c.encoding !== 'utf8' ? c.encoding : 'gbk'
+    const text = decode(buf, encoding)
+    return { text, encoding, bom: bom && encoding === 'utf8', eol: /\r\n/.test(text) ? 'crlf' : 'lf', size: st.size }
   },
-  writeText: (id: string, p: string, content: string): Promise<void> =>
-    need(id).fs.writeFile(p, Buffer.from(content, 'utf8'))
+
+  async saveText(id: string, p: string, text: string, encoding: Encoding, bom: boolean): Promise<void> {
+    let buf = encode(text, encoding)
+    if (encoding !== 'utf8' && decode(buf, encoding) !== text) {
+      throw new Error(`内容中有无法用 ${encoding.toUpperCase()} 表示的字符，请改用 UTF-8 保存`)
+    }
+    if (bom && encoding === 'utf8') buf = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), buf])
+    await need(id).fs.writeFile(p, buf)
+  }
 }
+
+const MAX_EDIT_SIZE = 10 * 1024 * 1024
 
 /* ---------------- 传输队列 ---------------- */
 
