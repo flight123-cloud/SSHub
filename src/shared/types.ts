@@ -150,6 +150,13 @@ export interface ExternalEditEvent {
 
 /** 应用设置（保存在 ~/Library/Application Support/SSHub/settings.json） */
 export interface AppSettings {
+  // 主题
+  /** 界面外观：跟随系统 / 深色 / 浅色 */
+  appearance: 'system' | 'dark' | 'light'
+  /** 深色模式下使用的终端配色 */
+  terminalThemeDark: string
+  /** 浅色模式下使用的终端配色 */
+  terminalThemeLight: string
   // 终端外观
   fontFamily: string
   fontSize: number
@@ -173,7 +180,18 @@ export interface AppSettings {
   rightClick: 'menu' | 'paste'
   /** 调整大小时显示行列数 */
   resizeOverlay: boolean
+  /** 分屏时让未聚焦的面板变暗 */
+  dimUnfocusedSplits: boolean
+  // 通知
+  /** 长命令完成通知：从不 / 窗口或标签页不在前台时 / 总是 */
+  notifyOnCommandFinish: 'never' | 'unfocused' | 'always'
+  /** 命令运行超过多少秒才通知 */
+  notifyAfterSeconds: number
+  /** 终端响铃（\a）时通知并在标签页上标记 */
+  bellNotify: boolean
   // 连接与文件
+  /** 关闭标签页后可撤销的秒数（0 = 不可撤销） */
+  undoCloseSeconds: number
   confirmCloseConnected: boolean
   /** 双击远程文本文件：编辑 / 下载 */
   doubleClickText: 'edit' | 'download'
@@ -181,6 +199,9 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  appearance: 'system',
+  terminalThemeDark: 'sshub-dark',
+  terminalThemeLight: 'sshub-light',
   fontFamily: '"SF Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace',
   fontSize: 14,
   lineHeight: 1.15,
@@ -195,6 +216,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   optionAsAlt: false,
   rightClick: 'menu',
   resizeOverlay: true,
+  dimUnfocusedSplits: true,
+  notifyOnCommandFinish: 'unfocused',
+  notifyAfterSeconds: 10,
+  bellNotify: true,
+  undoCloseSeconds: 10,
   confirmCloseConnected: true,
   doubleClickText: 'edit',
   showHiddenFiles: false

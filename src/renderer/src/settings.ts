@@ -43,3 +43,18 @@ export function useSettings(): AppSettings {
     () => current
   )
 }
+
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+/** 当前是否为深色外观（跟随系统时随系统切换） */
+export function useIsDark(): boolean {
+  const s = useSettings()
+  const systemDark = useSyncExternalStore(
+    (l) => {
+      darkQuery.addEventListener('change', l)
+      return () => darkQuery.removeEventListener('change', l)
+    },
+    () => darkQuery.matches
+  )
+  return s.appearance === 'system' ? systemDark : s.appearance === 'dark'
+}

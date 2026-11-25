@@ -4,12 +4,15 @@ import { emitCommand, startBus } from './bus'
 import { Sidebar } from './components/Sidebar'
 import { SessionDialog } from './components/SessionDialog'
 import { PromptDialog, type PromptOptions } from './components/Modal'
-import { TerminalView, type ConnStatus } from './components/TerminalView'
+import { TerminalView, type AttentionKind, type ConnStatus } from './components/TerminalView'
+import { SplitView } from './components/SplitView'
+import { equalize, leaf, leaves, neighbor, newPaneId, removePane, setRatio, splitPane, type PaneNode } from './panes'
 import { FilesView } from './components/FilesView'
 import { FtpView } from './components/FtpView'
 import { SettingsDialog } from './components/SettingsDialog'
 import { CommandPalette, type PaletteItem } from './components/CommandPalette'
-import { getSettings, updateSettings, useSettings } from './settings'
+import { getSettings, updateSettings, useIsDark, useSettings } from './settings'
+import { getTheme } from './themes'
 import { errMsg, parseQuick, uid } from './util'
 
 type View = 'terminal' | 'files' | 'split'
@@ -24,12 +27,26 @@ interface Tab {
   conn?: ConnectResult
   error?: string
   view: View
+  // ---- 分屏（仅 SSH）----
+  tree: PaneNode
+  /** 面板创建顺序 */
+  order: string[]
+  focusedPane: string
+  /** 文件传输使用这个面板的连接；标签页的状态也取自它 */
+  primaryPane: string
+  zoomed: string | null
+  panes: Record<string, { status: ConnStatus; conn?: ConnectResult; error?: string }>
+  /** 已关闭、等待撤销 */
+  closedAt?: number
+  /** 后台有提醒（响铃 / 命令完成） */
+  attention?: boolean
 }
 
 interface Toast {
   id: string
   msg: string
   error?: boolean
+  action?: { label: string; run: () => void }
 }
 
 function loadNum(key: string, def: number): number {
@@ -57,6 +74,13 @@ export default function App() {
   const [editing, setEditing] = useState<{ session?: SessionInfo } | null>(null)
   const [prompt, setPrompt] = useState<{ opts: PromptOptions; resolve: (v: string | null, c: boolean) => void } | null>(null)
   const settings = useSettings()
+  const isDark = useIsDark()
+  const termTheme = getTheme(isDark ? settings.terminalThemeDark : settings.terminalThemeLight, isDark)
+  useEffect(() => {
+    const root = document.documentElement
+    root.dataset.theme = isDark ? 'dark' : 'light'
+    root.style.setProperty('--bg-term', termTheme.colors.background ?? '')
+  }, [isDark, termTheme])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [palette, setPalette] = useState<'sessions' | 'all' | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(() => loadNum('sidebarWidth', 250))
@@ -69,11 +93,13 @@ export default function App() {
   const activeRef = useRef(activeKey)
   activeRef.current = activeKey
 
-  const notify = useCallback((msg: string, error = false) => {
+  const notify = useCallback((msg: string, error = false, action?: Toast['action'], ms?: number): string => {
     const id = uid()
-    setToasts((t) => [...t, { id, msg, error }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), error ? 6000 : 3000)
+    setToasts((t) => [...t, { id, msg, error, action }])
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms ?? (error ? 6000 : 3000))
+    return id
   }, [])
+  const dismissToast = (id: string): void => setToasts((t) => t.filter((x) => x.id !== id))
 
   const reload = useCallback(async () => {
     try {
@@ -90,20 +116,140 @@ export default function App() {
   const ask = (opts: PromptOptions): Promise<{ value: string | null; checked: boolean }> =>
     new Promise((resolve) => setPrompt({ opts, resolve: (value, checked) => resolve({ value, checked }) }))
 
-  const updateTab = (key: string, patch: Partial<Tab>): void =>
-    setTabs((list) => list.map((t) => (t.key === key ? { ...t, ...patch } : t)))
+  const updateTab = (key: string, patch: Partial<Tab> | ((t: Tab) => Partial<Tab>)): void =>
+    setTabs((list) => list.map((t) => (t.key === key ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t)))
 
-  const openTab = (tab: Omit<Tab, 'key' | 'status' | 'view'>): void => {
+  /** 标签页中可见（未关闭）的列表 */
+  const visibleTabs = tabs.filter((t) => !t.closedAt)
+
+  const openTab = (tab: Pick<Tab, 'title' | 'protocol' | 'sessionId' | 'quick'>): void => {
     const key = uid()
-    setTabs((list) => [...list, { ...tab, key, status: 'connecting', view: tab.protocol === 'ftp' ? 'files' : 'terminal' }])
+    const first = newPaneId()
+    setTabs((list) => [
+      ...list,
+      {
+        ...tab,
+        key,
+        status: 'connecting',
+        view: tab.protocol === 'ftp' ? 'files' : 'terminal',
+        tree: leaf(first),
+        order: [first],
+        focusedPane: first,
+        primaryPane: first,
+        zoomed: null,
+        panes: { [first]: { status: 'connecting' } }
+      }
+    ])
     setActiveKey(key)
+  }
+
+  /** 面板连接状态变化；主面板的状态同步到标签页 */
+  const onPaneStatus = (key: string, pane: string, status: ConnStatus, conn?: ConnectResult, error?: string): void =>
+    updateTab(key, (t) => {
+      const prev = t.panes[pane]
+      const info = { status, conn: conn ?? (status === 'connected' ? prev?.conn : prev?.conn), error }
+      const panes = { ...t.panes, [pane]: info }
+      return pane === t.primaryPane ? { panes, status, conn: info.conn, error } : { panes }
+    })
+
+  /* ---------- 分屏操作 ---------- */
+  const splitFocused = (dir: 'row' | 'col'): void => {
+    const t = tabsRef.current.find((x) => x.key === activeRef.current)
+    if (!t || t.protocol !== 'ssh') return
+    const id = newPaneId()
+    updateTab(t.key, (x) => ({
+      tree: splitPane(x.tree, x.focusedPane, dir, id),
+      order: [...x.order, id],
+      focusedPane: id,
+      zoomed: null,
+      view: x.view === 'files' ? 'terminal' : x.view,
+      panes: { ...x.panes, [id]: { status: 'connecting' } }
+    }))
+  }
+
+  const closePane = async (key: string, pane: string): Promise<void> => {
+    const t = tabsRef.current.find((x) => x.key === key)
+    if (!t) return
+    const rest = removePane(t.tree, pane)
+    if (!rest) return closeTab(key)
+    if (
+      t.panes[pane]?.status === 'connected' &&
+      getSettings().confirmCloseConnected &&
+      !(await window.api.ui.confirm('断开并关闭这个分屏？'))
+    )
+      return
+    updateTab(key, (x) => {
+      const remaining = leaves(rest)
+      const focusedPane = x.focusedPane === pane ? (neighbor(x.tree, pane, 'left') ?? neighbor(x.tree, pane, 'up') ?? remaining[0]) : x.focusedPane
+      const primaryPane = x.primaryPane === pane ? remaining[0] : x.primaryPane
+      const panes = { ...x.panes }
+      delete panes[pane]
+      const p = panes[primaryPane]
+      return {
+        tree: rest,
+        order: x.order.filter((o) => o !== pane),
+        focusedPane: remaining.includes(focusedPane) ? focusedPane : remaining[0],
+        primaryPane,
+        zoomed: null,
+        panes,
+        status: p?.status ?? x.status,
+        conn: p?.conn,
+        error: p?.error
+      }
+    })
+  }
+
+  const focusPane = (dir: 'left' | 'right' | 'up' | 'down' | 'next' | 'prev'): void => {
+    const t = tabsRef.current.find((x) => x.key === activeRef.current)
+    if (!t || t.protocol !== 'ssh') return
+    let target: string | null
+    if (dir === 'next' || dir === 'prev') {
+      const ls = leaves(t.tree)
+      const i = ls.indexOf(t.focusedPane)
+      target = ls[(i + (dir === 'next' ? 1 : -1) + ls.length) % ls.length]
+    } else target = neighbor(t.tree, t.focusedPane, dir)
+    if (target) updateTab(t.key, { focusedPane: target, zoomed: t.zoomed ? target : null })
+  }
+
+  /* ---------- 提醒：系统通知 / Dock 弹跳 / 标签页标记 ---------- */
+  const onAttention = (key: string, pane: string, kind: AttentionKind, message: string): void => {
+    const t = tabsRef.current.find((x) => x.key === key)
+    if (!t || t.closedAt) return
+    const windowFocused = document.hasFocus()
+    const inFront = windowFocused && activeRef.current === key && t.view !== 'files' && (t.zoomed === null || t.zoomed === pane)
+    const st = getSettings()
+    if (kind !== 'bell' && st.notifyOnCommandFinish === 'never' && kind === 'command') return
+    const must = kind !== 'bell' && st.notifyOnCommandFinish === 'always'
+    if (inFront && !must) return
+    if (activeRef.current !== key) updateTab(key, { attention: true })
+    const goto = (): void => {
+      void window.api.ui.focusWindow()
+      setActiveKey(key)
+      updateTab(key, { attention: false, focusedPane: pane })
+    }
+    if (windowFocused) {
+      // 窗口在前台时，响铃只在标签页上做标记，不弹提示
+      if (kind === 'bell') return
+      if (activeRef.current !== key || must) notify(`${t.title}：${message}`, false, { label: '查看', run: goto }, 6000)
+      return
+    }
+    void window.api.ui.requestAttention()
+    try {
+      const n = new Notification(t.title, { body: kind === 'bell' ? '终端响铃' : message, silent: kind === 'bell' })
+      n.onclick = goto
+    } catch {
+      /* 通知不可用时忽略 */
+    }
   }
 
   const connectSession = (s: SessionInfo): void => openTab({ title: s.name, sessionId: s.id, protocol: s.protocol })
 
   const quickConnect = async (text: string): Promise<void> => {
     const q = parseQuick(text)
-    if (!q) return notify('格式不正确。示例：root@1.2.3.4、user@host:2222、ftp://user@host', true)
+    if (!q) {
+      notify('格式不正确。示例：root@1.2.3.4、user@host:2222、ftp://user@host', true)
+      return
+    }
     const isFtp = q.protocol === 'ftp'
     const anonymous = isFtp && q.ftp?.anonymous
     const kind = isFtp ? (q.ftp?.security === 'none' ? 'FTP' : 'FTPS') : 'SSH'
@@ -200,23 +346,74 @@ export default function App() {
     return prepares.current.get(key)!
   }
 
+  const undoTimers = useRef(new Map<string, { timer: number; toast: string }>())
+
+  /** 彻底移除标签页（卸载组件、断开连接） */
+  const removeTab = (key: string): void => {
+    prepares.current.delete(key)
+    undoTimers.current.delete(key)
+    setTabs((list) => list.filter((t) => t.key !== key))
+  }
+
   const closeTab = async (key: string): Promise<void> => {
     const tab = tabsRef.current.find((t) => t.key === key)
-    if (!tab) return
-    if (
-      tab.status === 'connected' &&
-      getSettings().confirmCloseConnected &&
-      !(await window.api.ui.confirm(`断开并关闭「${tab.title}」？`))
-    )
-      return
-    prepares.current.delete(key)
-    setTabs((list) => {
-      const idx = list.findIndex((t) => t.key === key)
-      const next = list.filter((t) => t.key !== key)
-      if (activeRef.current === key) setActiveKey(next[Math.min(idx, next.length - 1)]?.key ?? null)
-      return next
-    })
+    if (!tab || tab.closedAt) return
+    const st = getSettings()
+    const anyConnected = Object.values(tab.panes).some((p) => p.status === 'connected') || tab.status === 'connected'
+    if (anyConnected && st.confirmCloseConnected && !(await window.api.ui.confirm(`断开并关闭「${tab.title}」？`))) return
+    // 切换到相邻的标签页
+    if (activeRef.current === key) {
+      const vis = tabsRef.current.filter((t) => !t.closedAt)
+      const idx = vis.findIndex((t) => t.key === key)
+      const rest = vis.filter((t) => t.key !== key)
+      setActiveKey(rest[Math.min(idx, rest.length - 1)]?.key ?? null)
+    }
+    if (st.undoCloseSeconds <= 0) return removeTab(key)
+    // 先隐藏，连接保持；超时后才真正关闭
+    updateTab(key, { closedAt: Date.now() })
+    const toast = notify(`已关闭「${tab.title}」`, false, { label: '撤销 ⌘Z', run: () => reopenTab(key) }, st.undoCloseSeconds * 1000)
+    const timer = window.setTimeout(() => removeTab(key), st.undoCloseSeconds * 1000)
+    undoTimers.current.set(key, { timer, toast })
   }
+
+  /** 恢复最近关闭的标签页（或指定的那个） */
+  const reopenTab = (key?: string): boolean => {
+    const closed = tabsRef.current.filter((t) => t.closedAt).sort((a, b) => b.closedAt! - a.closedAt!)
+    const t = key ? closed.find((x) => x.key === key) : closed[0]
+    if (!t) return false
+    const u = undoTimers.current.get(t.key)
+    if (u) {
+      window.clearTimeout(u.timer)
+      dismissToast(u.toast)
+      undoTimers.current.delete(t.key)
+    }
+    updateTab(t.key, { closedAt: undefined })
+    setActiveKey(t.key)
+    return true
+  }
+
+  // ⌘Z：焦点在终端（而不是输入框 / 编辑器）时撤销关闭标签页
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return
+      const el = document.activeElement as HTMLElement | null
+      const inTerminal = !el || el === document.body || el.classList.contains('xterm-helper-textarea')
+      if (!inTerminal || !tabsRef.current.some((t) => t.closedAt)) return
+      e.preventDefault()
+      e.stopPropagation()
+      reopenTab()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 切换到有提醒标记的标签页时清除标记
+  useEffect(() => {
+    const t = tabs.find((x) => x.key === activeKey)
+    if (t?.attention) updateTab(t.key, { attention: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey])
 
   const deleteSession = async (s: SessionInfo): Promise<void> => {
     if (!(await window.api.ui.confirm(`删除会话「${s.name}」？`))) return
@@ -237,9 +434,35 @@ export default function App() {
             focusQuickConnect()
             break
           case 'close-tab':
-            // 打开了编辑器时，⌘W 只关闭编辑器
+            // 打开了编辑器时，⌘W 只关闭编辑器；有分屏时先关闭当前分屏
             if (document.querySelector('.modal.editor')) emitCommand('close-editor')
+            else if (active && active.protocol === 'ssh' && active.view !== 'files' && leaves(active.tree).length > 1)
+              void closePane(active.key, active.focusedPane)
             else if (active) void closeTab(active.key)
+            break
+          case 'reopen-tab':
+            if (!reopenTab()) notify('没有可以恢复的标签页')
+            break
+          case 'split-right':
+            splitFocused('row')
+            break
+          case 'split-down':
+            splitFocused('col')
+            break
+          case 'zoom-pane':
+            if (active && leaves(active.tree).length > 1)
+              updateTab(active.key, (x) => ({ zoomed: x.zoomed ? null : x.focusedPane }))
+            break
+          case 'equalize-panes':
+            if (active) updateTab(active.key, (x) => ({ tree: equalize(x.tree) }))
+            break
+          case 'pane-left':
+          case 'pane-right':
+          case 'pane-up':
+          case 'pane-down':
+          case 'pane-next':
+          case 'pane-prev':
+            focusPane(cmd.slice(5) as 'left')
             break
           case 'view-terminal':
           case 'view-files':
@@ -269,7 +492,7 @@ export default function App() {
             break
           case 'prev-tab':
           case 'next-tab': {
-            const list = tabsRef.current
+            const list = tabsRef.current.filter((t) => !t.closedAt)
             if (!list.length) break
             const i = list.findIndex((t) => t.key === activeRef.current)
             const n = (i + (cmd === 'next-tab' ? 1 : -1) + list.length) % list.length
@@ -306,14 +529,14 @@ export default function App() {
 
   /** 命令面板条目：已打开的标签页、已保存的会话、操作 */
   const buildPalette = (mode: 'sessions' | 'all'): PaletteItem[] => {
-    const activeTab = tabs.find((t) => t.key === activeKey)
+    const activeTab = visibleTabs.find((t) => t.key === activeKey)
     const toggle = (key: keyof typeof settings, label: string): PaletteItem => ({
       id: 'toggle-' + key,
       group: '设置',
       label: `${settings[key] ? '关闭' : '开启'}：${label}`,
       run: () => updateSettings({ [key]: !settings[key] })
     })
-    const tabItems: PaletteItem[] = tabs.map((t, i) => ({
+    const tabItems: PaletteItem[] = visibleTabs.map((t, i) => ({
       id: 'tab-' + t.key,
       group: '已打开的标签页',
       label: t.title,
@@ -347,14 +570,20 @@ export default function App() {
       cmd('sidebar', sidebarOpen ? '隐藏会话列表' : '显示会话列表', '⌘B', () => setSidebarOpen(!sidebarOpen), 'sidebar'),
       cmd('font+', '放大字体', '⌘+', () => updateSettings({ fontSize: Math.min(32, settings.fontSize + 1) }), 'font zoom'),
       cmd('font-', '缩小字体', '⌘-', () => updateSettings({ fontSize: Math.max(9, settings.fontSize - 1) }), 'font zoom'),
-      cmd('font0', '重置字体大小', '⌘0', () => updateSettings({ fontSize: 14 }), 'font zoom')
+      cmd('font0', '重置字体大小', '⌘0', () => updateSettings({ fontSize: 14 }), 'font zoom'),
+      cmd('reopen', '重新打开关闭的标签页', '⌘⇧T', () => void reopenTab(), 'undo reopen 撤销'),
+      cmd('appearance-dark', '切换到深色外观', undefined, () => updateSettings({ appearance: 'dark' }), 'theme dark 主题 外观'),
+      cmd('appearance-light', '切换到浅色外观', undefined, () => updateSettings({ appearance: 'light' }), 'theme light 主题 外观'),
+      cmd('appearance-system', '外观跟随系统', undefined, () => updateSettings({ appearance: 'system' }), 'theme system 主题 外观')
     ]
     if (activeTab) {
       if (activeTab.protocol === 'ssh') {
         actions.push(
           cmd('v-term', '切换到终端', '⌘1', () => updateTab(activeTab.key, { view: 'terminal' }), 'terminal view'),
           cmd('v-files', '切换到文件传输', '⌘2', () => updateTab(activeTab.key, { view: 'files' }), 'files sftp view'),
-          cmd('v-split', '切换到分屏', '⌘3', () => updateTab(activeTab.key, { view: 'split' }), 'split view'),
+          cmd('v-split', '终端 + 文件传输同时显示', '⌘3', () => updateTab(activeTab.key, { view: 'split' }), 'split view'),
+          cmd('split-right', '向右拆分终端', '⌘D', () => splitFocused('row'), 'split pane 分屏'),
+          cmd('split-down', '向下拆分终端', '⌘⇧D', () => splitFocused('col'), 'split pane 分屏'),
           cmd('find', '在终端中查找', '⌘F', () => emitCommand('find'), 'search find'),
           cmd('clear', '清屏', '⌘L', () => emitCommand('clear'), 'clear'),
           cmd('save-output', '将终端输出保存为文件', '⌘⇧S', () => emitCommand('save-output'), 'save export log')
@@ -362,7 +591,14 @@ export default function App() {
       }
       const sess = sessions.find((x) => x.id === activeTab.sessionId)
       if (sess) actions.push(cmd('edit-session', `编辑会话「${sess.name}」`, undefined, () => setEditing({ session: sess }), 'edit'))
-      actions.push(cmd('close-tab', `关闭标签页「${activeTab.title}」`, '⌘W', () => void closeTab(activeTab.key), 'close'))
+      if (activeTab.protocol === 'ssh' && leaves(activeTab.tree).length > 1) {
+        actions.push(
+          cmd('zoom', activeTab.zoomed ? '还原分屏' : '放大当前分屏', '⌘⇧↩', () => updateTab(activeTab.key, (x) => ({ zoomed: x.zoomed ? null : x.focusedPane })), 'zoom pane 分屏'),
+          cmd('equalize', '均分所有分屏', '⌘⌃=', () => updateTab(activeTab.key, (x) => ({ tree: equalize(x.tree) })), 'equalize pane 分屏'),
+          cmd('close-pane', '关闭当前分屏', '⌘W', () => void closePane(activeTab.key, activeTab.focusedPane), 'close pane 分屏')
+        )
+      }
+      actions.push(cmd('close-tab', `关闭标签页「${activeTab.title}」`, undefined, () => void closeTab(activeTab.key), 'close'))
     }
     const toggles = [
       toggle('pasteProtection', '粘贴保护'),
@@ -370,7 +606,9 @@ export default function App() {
       toggle('osc52Write', '允许服务器写入剪贴板'),
       toggle('optionAsAlt', 'Option 键作为 Alt'),
       toggle('gpuRendering', 'GPU 加速渲染'),
-      toggle('showHiddenFiles', '默认显示隐藏文件')
+      toggle('showHiddenFiles', '默认显示隐藏文件'),
+      toggle('dimUnfocusedSplits', '未聚焦的分屏变暗'),
+      toggle('bellNotify', '响铃提醒')
     ]
     return [...actions, ...tabItems, ...sessionItems, ...toggles]
   }
@@ -384,10 +622,10 @@ export default function App() {
           ☰
         </button>
         <div className="tabs nodrag">
-          {tabs.map((t) => (
+          {visibleTabs.map((t) => (
             <div
               key={t.key}
-              className={'tab' + (t.key === activeKey ? ' active' : '')}
+              className={'tab' + (t.key === activeKey ? ' active' : '') + (t.attention ? ' attention' : '')}
               onMouseDown={(e) => {
                 if (e.button === 1) void closeTab(t.key)
                 else setActiveKey(t.key)
@@ -396,6 +634,8 @@ export default function App() {
             >
               <span className={'dot ' + t.status} />
               <span className="tab-title">{t.title}</span>
+              {t.attention && <span className="tab-bell" title="有新的提醒">●</span>}
+              {t.protocol === 'ssh' && leaves(t.tree).length > 1 && <span className="tab-panes">{leaves(t.tree).length}</span>}
               <span
                 className="tab-close"
                 onMouseDown={(e) => e.stopPropagation()}
@@ -429,7 +669,7 @@ export default function App() {
           </>
         )}
         <div className="main">
-          {tabs.length === 0 && (
+          {visibleTabs.length === 0 && (
             <div className="welcome">
               <div className="welcome-logo">SSHub</div>
               <div className="muted">SSH 终端 · SFTP / FTP 文件传输</div>
@@ -440,7 +680,7 @@ export default function App() {
                 <button onClick={focusQuickConnect}>快速连接</button>
               </div>
               <div className="muted small shortcuts">
-                ⌘N 新建会话 · ⌘K 快速连接 · ⌘1/2/3 切换终端/文件/分屏 · ⌘W 关闭标签
+                ⌘N 新建会话 · ⌘P 搜索会话 · ⌘⇧P 命令面板 · ⌘D 拆分终端 · ⌘, 设置
               </div>
             </div>
           )}
@@ -459,7 +699,7 @@ export default function App() {
                       [
                         ['terminal', '终端'],
                         ['files', '文件传输'],
-                        ['split', '分屏']
+                        ['split', '终端+文件']
                       ] as [View, string][]
                     ).map(([v, l]) => (
                       <button key={v} className={t.view === v ? 'active' : ''} onClick={() => updateTab(t.key, { view: v })}>
@@ -489,15 +729,27 @@ export default function App() {
                 ) : (
                 <div className="tab-content">
                   <div className="term-area" style={{ display: showTerm ? 'flex' : 'none' }}>
-                    <TerminalView
-                      active={active}
-                      visible={active && showTerm}
-                      title={t.title}
-                      settings={settings}
-                      prepare={getPrepare(t.key)}
-                      onStatus={(status, conn, error) =>
-                        updateTab(t.key, conn ? { status, conn, error } : { status, error })
-                      }
+                    <SplitView
+                      tree={t.tree}
+                      order={t.order}
+                      focused={t.focusedPane}
+                      zoomed={t.zoomed}
+                      dimUnfocused={settings.dimUnfocusedSplits}
+                      onFocus={(id) => updateTab(t.key, { focusedPane: id })}
+                      onRatio={(splitId, r) => updateTab(t.key, (x) => ({ tree: setRatio(x.tree, splitId, r) }))}
+                      renderPane={(id) => (
+                        <TerminalView
+                          active={active && id === t.focusedPane}
+                          visible={active && showTerm && (t.zoomed === null || t.zoomed === id)}
+                          title={t.title}
+                          settings={settings}
+                          theme={termTheme.colors}
+                          prepare={getPrepare(t.key)}
+                          onFocus={() => t.focusedPane !== id && updateTab(t.key, { focusedPane: id })}
+                          onAttention={(kind, msg) => onAttention(t.key, id, kind, msg)}
+                          onStatus={(status, conn, error) => onPaneStatus(t.key, id, status, conn, error)}
+                        />
+                      )}
                     />
                   </div>
                   {showFiles && (
@@ -560,7 +812,18 @@ export default function App() {
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={'toast' + (t.error ? ' error' : '')}>
-            {t.msg}
+            <span>{t.msg}</span>
+            {t.action && (
+              <button
+                className="toast-action"
+                onClick={() => {
+                  dismissToast(t.id)
+                  t.action!.run()
+                }}
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

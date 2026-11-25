@@ -29,6 +29,7 @@ import { oneDark } from '@codemirror/theme-one-dark'
 import { ENCODING_LABELS, type Encoding, type TextFile } from '../../../shared/types'
 import { onCommand } from '../bus'
 import { errMsg, formatSize } from '../util'
+import { getSettings, useIsDark } from '../settings'
 
 /** 搜索面板等内置文案的中文翻译 */
 const PHRASES = EditorState.phrases.of({
@@ -83,6 +84,10 @@ export function CodeEditor(props: CodeEditorProps) {
   const viewRef = useRef<EditorView | null>(null)
   const langComp = useRef(new Compartment())
   const wrapComp = useRef(new Compartment())
+  const themeComp = useRef(new Compartment())
+  const isDark = useIsDark()
+  const isDarkRef = useRef(isDark)
+  isDarkRef.current = isDark
   const savedDoc = useRef('')
   const [file, setFile] = useState<TextFile | null>(null)
   const [encoding, setEncoding] = useState<Encoding>('utf8')
@@ -154,14 +159,14 @@ export function CodeEditor(props: CodeEditorProps) {
         ...foldKeymap,
         indentWithTab
       ]),
-      oneDark,
+      themeComp.current.of(isDarkRef.current ? oneDark : []),
       PHRASES,
       langComp.current.of([]),
       wrapComp.current.of([]),
       updateListener,
       EditorView.theme({
         '&': { height: '100%', fontSize: '13px' },
-        '.cm-scroller': { fontFamily: '"SF Mono", Menlo, Monaco, "PingFang SC", monospace' }
+        '.cm-scroller': { fontFamily: getSettings().fontFamily }
       })
     ]
     const view = new EditorView({ state: EditorState.create({ doc, extensions }), parent: hostRef.current! })
@@ -186,6 +191,10 @@ export function CodeEditor(props: CodeEditorProps) {
   useEffect(() => {
     viewRef.current?.dispatch({ effects: wrapComp.current.reconfigure(wrap ? EditorView.lineWrapping : []) })
   }, [wrap])
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: themeComp.current.reconfigure(isDark ? oneDark : []) })
+  }, [isDark])
 
   const save = async (): Promise<void> => {
     const v = viewRef.current

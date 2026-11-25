@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { ClipboardAddon } from '@xterm/addon-clipboard'
+import type { ITheme } from '@xterm/xterm'
 import type { AppSettings, ConnectRequest, ConnectResult } from '../../../shared/types'
 import { bindConnection, onCommand } from '../bus'
 import { errMsg } from '../util'
@@ -14,38 +15,23 @@ import { Modal } from './Modal'
 
 export type ConnStatus = 'connecting' | 'connected' | 'closed' | 'error'
 
+/** 需要提醒用户的事件 */
+export type AttentionKind = 'bell' | 'command' | 'osc'
+
 export interface TerminalViewProps {
+  /** 所在标签页处于前台，且本面板是该标签页中聚焦的面板 */
   active: boolean
   visible: boolean
+  /** 点击或聚焦本面板 */
+  onFocus?: () => void
+  /** 响铃、长命令完成、服务器发来的通知 */
+  onAttention?: (kind: AttentionKind, message: string) => void
   title: string
   settings: AppSettings
+  theme: ITheme
   /** 每次（重新）连接前调用，返回 null 表示用户取消 */
   prepare: (retryAuth: boolean) => Promise<Omit<ConnectRequest, 'cols' | 'rows'> | null>
   onStatus: (status: ConnStatus, info?: ConnectResult, error?: string) => void
-}
-
-const THEME = {
-  background: '#16171b',
-  foreground: '#d8dae0',
-  cursor: '#e6e6e6',
-  cursorAccent: '#16171b',
-  selectionBackground: '#3a4a6b',
-  black: '#1e1f24',
-  red: '#f07178',
-  green: '#a6d189',
-  yellow: '#e5c07b',
-  blue: '#7aa2f7',
-  magenta: '#c792ea',
-  cyan: '#89ddff',
-  white: '#d8dae0',
-  brightBlack: '#5c6370',
-  brightRed: '#ff8b92',
-  brightGreen: '#c3e88d',
-  brightYellow: '#ffcb6b',
-  brightBlue: '#82aaff',
-  brightMagenta: '#d7a5ff',
-  brightCyan: '#a3f7ff',
-  brightWhite: '#ffffff'
 }
 
 export function TerminalView(props: TerminalViewProps) {
@@ -202,7 +188,7 @@ export function TerminalView(props: TerminalViewProps) {
       macOptionIsMeta: st.optionAsAlt,
       allowProposedApi: true,
       macOptionClickForcesSelection: true,
-      theme: THEME
+      theme: props.theme
     })
     const fit = new FitAddon()
     const search = new SearchAddon()
@@ -239,6 +225,65 @@ export function TerminalView(props: TerminalViewProps) {
       }, 120)
     })
 
+    /* ---------- 提醒：响铃 / 长命令完成 / OSC 通知 ---------- */
+    const attention = (kind: AttentionKind, msg: string): void => propsRef.current.onAttention?.(kind, msg)
+    term.onBell(() => {
+      if (settingsRef.current.bellNotify) attention('bell', '终端响铃')
+    })
+    // OSC 9（iTerm2 通知；9;4 是进度条，忽略）与 OSC 777;notify;标题;内容
+    term.parser.registerOscHandler(9, (data) => {
+      if (!/^\d+;/.test(data) && data.trim()) attention('osc', data.trim())
+      return true
+    })
+    term.parser.registerOscHandler(777, (data) => {
+      const [kind, title, ...body] = data.split(';')
+      if (kind === 'notify') attention('osc', [title, body.join(';')].filter(Boolean).join('：'))
+      return true
+    })
+    // 命令完成检测：优先使用 OSC 133（服务器 shell 集成），否则根据命令提示符推断
+    const cmd = { start: 0, text: '', osc133: false }
+    /** 本地记录的键入内容：回显还没到达时用它作为命令文本 */
+    let typed = ''
+    const formatDuration = (ms: number): string => {
+      const sec = Math.round(ms / 1000)
+      return sec < 60 ? `${sec} 秒` : `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`
+    }
+    const finishCommand = (exitCode?: number): void => {
+      if (!cmd.start) return
+      const took = Date.now() - cmd.start
+      const text = cmd.text
+      cmd.start = 0
+      const st = settingsRef.current
+      if (st.notifyOnCommandFinish === 'never' || took < st.notifyAfterSeconds * 1000) return
+      const status = exitCode === undefined ? '已完成' : exitCode === 0 ? '执行成功' : `执行失败（退出码 ${exitCode}）`
+      attention('command', `${text ? `「${text}」` : '命令'}${status}，用时 ${formatDuration(took)}`)
+    }
+    term.parser.registerOscHandler(133, (data) => {
+      cmd.osc133 = true
+      if (data.startsWith('C')) {
+        cmd.start = Date.now()
+        cmd.text = currentLine().replace(/^.*?[$#%>❯➜]\s/, '').trim().slice(0, 80)
+      } else if (data.startsWith('D')) {
+        const code = Number(data.split(';')[1])
+        finishCommand(Number.isFinite(code) ? code : undefined)
+      }
+      return true
+    })
+    const currentLine = (): string => {
+      const b = term.buffer.active
+      return b.getLine(b.baseY + b.cursorY)?.translateToString(true) ?? ''
+    }
+    const PROMPT_END = /[$#%>❯➜»]$/
+    let quietTimer: number | undefined
+    term.onWriteParsed(() => {
+      if (!cmd.start || cmd.osc133) return
+      window.clearTimeout(quietTimer)
+      // 输出停下来 400ms 后，光标所在行看起来像命令提示符 → 认为命令结束
+      quietTimer = window.setTimeout(() => {
+        if (term.buffer.active.type === 'normal' && PROMPT_END.test(currentLine().trimEnd())) finishCommand()
+      }, 400)
+    })
+
     // 拦截粘贴（⌘V / 编辑菜单），在 xterm 处理之前做安全检查
     const onPaste = (e: ClipboardEvent): void => {
       const text = e.clipboardData?.getData('text/plain') ?? ''
@@ -251,6 +296,20 @@ export function TerminalView(props: TerminalViewProps) {
 
     term.onData((d) => {
       const id = connIdRef.current
+      // 在提示符处按下回车：记录命令开始（全屏程序如 vim 中按回车不算）
+      if (d.includes('\r') && !cmd.osc133 && term.buffer.active.type === 'normal') {
+        const line = currentLine()
+        if (PROMPT_END.test(line.replace(/\s+\S.*$/, '').trimEnd()) || /[$#%>❯➜»]\s/.test(line)) {
+          cmd.start = Date.now()
+          const fromLine = /[$#%>❯➜»]\s/.test(line) ? line.replace(/^.*?[$#%>❯➜»]\s/, '').trim() : ''
+          const local = (typed + d.split('\r')[0]).trim()
+          // 回显可能还没完全到达：本地记录更完整时用本地记录（用 ↑ 调出历史命令时本地记录为空，用屏幕上的）
+          cmd.text = (local.startsWith(fromLine) && local.length > fromLine.length ? local : fromLine || local).slice(0, 80)
+        }
+      }
+      if (d.includes('\r') || d === '\x03') typed = ''
+      else if (d === '\x7f') typed = typed.slice(0, -1)
+      else if (!d.startsWith('\x1b')) typed += d.replace(/[\x00-\x1f]/g, '')
       if (id && statusRef.current === 'connected') window.api.ssh.write(id, d)
       else if ((statusRef.current === 'closed' || statusRef.current === 'error') && d === '\r') {
         void connect(authFailedRef.current)
@@ -264,6 +323,7 @@ export function TerminalView(props: TerminalViewProps) {
     return () => {
       ro.disconnect()
       hostEl.removeEventListener('paste', onPaste, true)
+      window.clearTimeout(quietTimer)
       window.clearTimeout(overlayTimer.current)
       unbindRef.current?.()
       if (connIdRef.current) void window.api.ssh.disconnect(connIdRef.current)
@@ -271,6 +331,10 @@ export function TerminalView(props: TerminalViewProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (termRef.current) termRef.current.options.theme = props.theme
+  }, [props.theme])
 
   // 设置变化时实时生效
   useEffect(() => {
@@ -347,6 +411,8 @@ export function TerminalView(props: TerminalViewProps) {
   return (
     <div
       className="terminal-wrap"
+      onMouseDown={() => props.onFocus?.()}
+      onFocus={() => props.onFocus?.()}
       onContextMenu={(e) => {
         e.preventDefault()
         if (props.settings.rightClick === 'paste' && !e.ctrlKey) pasteFromClipboard()

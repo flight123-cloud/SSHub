@@ -100,6 +100,9 @@ const api = {
     /** 弹出保存对话框，写入文本；取消时返回 null */
     saveText: (defaultName: string, content: string) => call<string | null>('dialog:saveText', defaultName, content),
     copyText: (text: string) => call<void>('clipboard:write', text),
+    focusWindow: () => call<void>('app:focus'),
+    /** Dock 图标弹跳 */
+    requestAttention: () => call<void>('app:attention'),
     onMenu: (cb: (cmd: string) => void) => on('menu:command', cb)
   }
 }

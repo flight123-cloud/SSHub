@@ -7,7 +7,7 @@ import * as ftp from './ftp'
 import * as conns from './connections'
 import { friendlyError } from './errors'
 import { openExternal } from './externalEdit'
-import { getSettings, resetSettings, updateSettings } from './settings'
+import { applyNativeTheme, getSettings, resetSettings, updateSettings } from './settings'
 import { localfs } from './localfs'
 import { sessionStore } from './store'
 
@@ -89,10 +89,11 @@ function buildMenu(): void {
       submenu: [
         { label: '新建会话…', accelerator: 'CmdOrCtrl+N', click: sendCmd('new-session') },
         { label: '快速连接', accelerator: 'CmdOrCtrl+K', click: sendCmd('quick-connect') },
+        { label: '重新打开关闭的标签页', accelerator: 'CmdOrCtrl+Shift+T', click: sendCmd('reopen-tab') },
         { label: '搜索会话并连接…', accelerator: 'CmdOrCtrl+P', click: sendCmd('palette-sessions') },
         { label: '命令面板…', accelerator: 'CmdOrCtrl+Shift+P', click: sendCmd('palette') },
         { type: 'separator' },
-        { label: '关闭标签页', accelerator: 'CmdOrCtrl+W', click: sendCmd('close-tab') },
+        { label: '关闭分屏 / 标签页', accelerator: 'CmdOrCtrl+W', click: sendCmd('close-tab') },
         ...(isMac
           ? []
           : [
@@ -123,7 +124,25 @@ function buildMenu(): void {
       submenu: [
         { label: '终端', accelerator: 'CmdOrCtrl+1', click: sendCmd('view-terminal') },
         { label: '文件传输', accelerator: 'CmdOrCtrl+2', click: sendCmd('view-files') },
-        { label: '分屏', accelerator: 'CmdOrCtrl+3', click: sendCmd('view-split') },
+        { label: '终端 + 文件', accelerator: 'CmdOrCtrl+3', click: sendCmd('view-split') },
+        { type: 'separator' },
+        {
+          label: '终端分屏',
+          submenu: [
+            { label: '向右拆分', accelerator: 'CmdOrCtrl+D', click: sendCmd('split-right') },
+            { label: '向下拆分', accelerator: 'CmdOrCtrl+Shift+D', click: sendCmd('split-down') },
+            { type: 'separator' },
+            { label: '放大 / 还原当前分屏', accelerator: 'CmdOrCtrl+Shift+Enter', click: sendCmd('zoom-pane') },
+            { label: '均分所有分屏', accelerator: 'CmdOrCtrl+Control+=', click: sendCmd('equalize-panes') },
+            { type: 'separator' },
+            { label: '切换到左侧分屏', accelerator: 'CmdOrCtrl+Alt+Left', click: sendCmd('pane-left') },
+            { label: '切换到右侧分屏', accelerator: 'CmdOrCtrl+Alt+Right', click: sendCmd('pane-right') },
+            { label: '切换到上方分屏', accelerator: 'CmdOrCtrl+Alt+Up', click: sendCmd('pane-up') },
+            { label: '切换到下方分屏', accelerator: 'CmdOrCtrl+Alt+Down', click: sendCmd('pane-down') },
+            { label: '上一个分屏', accelerator: 'CmdOrCtrl+[', click: sendCmd('pane-prev') },
+            { label: '下一个分屏', accelerator: 'CmdOrCtrl+]', click: sendCmd('pane-next') }
+          ]
+        },
         { type: 'separator' },
         { label: '显示/隐藏会话列表', accelerator: 'CmdOrCtrl+B', click: sendCmd('toggle-sidebar') },
         { label: '放大字体', accelerator: 'CmdOrCtrl+=', click: sendCmd('font-bigger') },
@@ -233,6 +252,16 @@ function registerIpc(): void {
     })
     return r.response === 1
   })
+  handle('app:focus', () => {
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+  handle('app:attention', () => {
+    if (process.platform === 'darwin') app.dock?.bounce('informational')
+    else win?.flashFrame(true)
+  })
   handle('clipboard:write', (text: string) => clipboard.writeText(text))
   handle('settings:get', () => getSettings())
   handle('settings:set', (patch: Partial<AppSettings>) => updateSettings(patch))
@@ -241,6 +270,7 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  applyNativeTheme()
   buildMenu()
   registerIpc()
   createWindow()

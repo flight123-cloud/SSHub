@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, nativeTheme } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { DEFAULT_SETTINGS, type AppSettings } from '../shared/types'
@@ -19,7 +19,15 @@ function sanitize(input: Partial<AppSettings>, base: AppSettings): AppSettings {
   out.lineHeight = Math.min(2, Math.max(1, out.lineHeight))
   out.scrollback = Math.min(200000, Math.max(500, Math.round(out.scrollback)))
   out.minimumContrast = Math.min(21, Math.max(1, out.minimumContrast))
+  out.notifyAfterSeconds = Math.min(3600, Math.max(1, Math.round(out.notifyAfterSeconds)))
+  out.undoCloseSeconds = Math.min(600, Math.max(0, Math.round(out.undoCloseSeconds)))
+  if (!['system', 'dark', 'light'].includes(out.appearance)) out.appearance = 'system'
   return out
+}
+
+/** 让系统对话框、菜单、滚动条跟随界面外观 */
+export function applyNativeTheme(s: AppSettings = getSettings()): void {
+  nativeTheme.themeSource = s.appearance
 }
 
 export function getSettings(): AppSettings {
@@ -36,6 +44,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   cache = sanitize(patch, getSettings())
   fs.mkdirSync(path.dirname(FILE()), { recursive: true })
   fs.writeFileSync(FILE(), JSON.stringify(cache, null, 2))
+  applyNativeTheme(cache)
   send('settings:changed', cache)
   return cache
 }
@@ -43,6 +52,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
 export function resetSettings(): AppSettings {
   cache = { ...DEFAULT_SETTINGS }
   fs.writeFileSync(FILE(), JSON.stringify(cache, null, 2))
+  applyNativeTheme(cache)
   send('settings:changed', cache)
   return cache
 }
