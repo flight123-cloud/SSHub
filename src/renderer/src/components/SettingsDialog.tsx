@@ -5,7 +5,8 @@ import { THEMES, type TermTheme } from '../themes'
 import type { SessionInfo } from '../../../shared/types'
 import { formatAccelerator } from '../util'
 
-type Tab = 'appearance' | 'terminal' | 'behavior' | 'quick' | 'files'
+export type SettingsTab = 'appearance' | 'terminal' | 'behavior' | 'quick' | 'files'
+type Tab = SettingsTab
 
 const FONT_PRESETS: [string, string][] = [
   ['SF Mono（系统默认）', '"SF Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace'],
@@ -90,6 +91,7 @@ function HotkeyInput(props: { value: string; onChange: (v: string) => void }) {
 }
 
 export function SettingsDialog(props: {
+  initialTab?: SettingsTab
   settings: AppSettings
   onChange: (patch: Partial<AppSettings>) => void
   onReset: () => void
@@ -97,7 +99,7 @@ export function SettingsDialog(props: {
 }) {
   const s = props.settings
   const set = props.onChange
-  const [tab, setTab] = useState<Tab>('appearance')
+  const [tab, setTab] = useState<Tab>(props.initialTab ?? 'appearance')
   const presetValue = FONT_PRESETS.find(([, v]) => v === s.fontFamily)?.[1] ?? 'custom'
   const [customMode, setCustomMode] = useState(presetValue === 'custom')
   const [customFont, setCustomFont] = useState(s.fontFamily)

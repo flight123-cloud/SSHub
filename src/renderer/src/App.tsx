@@ -9,7 +9,10 @@ import { SplitView } from './components/SplitView'
 import { equalize, leaf, leaves, neighbor, newPaneId, removePane, setRatio, splitPane, type PaneNode } from './panes'
 import { FilesView } from './components/FilesView'
 import { FtpView } from './components/FtpView'
-import { SettingsDialog } from './components/SettingsDialog'
+import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
+import { ShortcutsDialog, WhatsNew } from './components/WhatsNew'
+import { ContextMenu, type MenuItem } from './components/ContextMenu'
+import { IconCommand, IconGear, IconHelp, IconMore, IconSearch, IconSparkle, IconSplitDown, IconSplitRight, IconZoom, IconBolt } from './components/Icons'
 import { CommandPalette, type PaletteItem } from './components/CommandPalette'
 import { getSettings, updateSettings, useIsDark, useSettings } from './settings'
 import { useTerminalTheme } from './themes'
@@ -76,7 +79,22 @@ export default function App() {
   const settings = useSettings()
   const isDark = useIsDark()
   const termTheme = useTerminalTheme(settings, isDark)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState<SettingsTab | null>(null)
+  const [whatsNew, setWhatsNew] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [version, setVersion] = useState('')
+  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  // 升级后第一次打开时自动显示新功能导览
+  useEffect(() => {
+    void window.api.app.info().then((info) => {
+      setVersion(info.version)
+      if (getSettings().lastSeenVersion !== info.version) setWhatsNew(true)
+    })
+  }, [])
+  const closeWhatsNew = (): void => {
+    setWhatsNew(false)
+    if (version) updateSettings({ lastSeenVersion: version })
+  }
   const [palette, setPalette] = useState<'sessions' | 'all' | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(() => loadNum('sidebarWidth', 250))
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -477,7 +495,13 @@ export default function App() {
             updateSettings({ fontSize: 14 })
             break
           case 'settings':
-            setSettingsOpen(true)
+            setSettingsOpen('appearance')
+            break
+          case 'whats-new':
+            setWhatsNew(true)
+            break
+          case 'shortcuts':
+            setShortcutsOpen(true)
             break
           case 'palette':
             setPalette('all')
@@ -561,7 +585,9 @@ export default function App() {
     const actions: PaletteItem[] = [
       cmd('new-session', '新建会话', '⌘N', () => setEditing({}), 'new add'),
       cmd('quick', '快速连接', '⌘K', focusQuickConnect, 'quick connect'),
-      cmd('settings', '打开设置', '⌘,', () => setSettingsOpen(true), 'settings preferences 偏好'),
+      cmd('settings', '打开设置', '⌘,', () => setSettingsOpen('appearance'), 'settings preferences 偏好'),
+      cmd('whats-new', '新功能介绍', undefined, () => setWhatsNew(true), "what's new help 帮助 引导 介绍"),
+      cmd('shortcuts', '快捷键一览', '⌘/', () => setShortcutsOpen(true), 'shortcuts keys help 帮助 快捷键'),
       cmd('sidebar', sidebarOpen ? '隐藏会话列表' : '显示会话列表', '⌘B', () => setSidebarOpen(!sidebarOpen), 'sidebar'),
       cmd('font+', '放大字体', '⌘+', () => updateSettings({ fontSize: Math.min(32, settings.fontSize + 1) }), 'font zoom'),
       cmd('font-', '缩小字体', '⌘-', () => updateSettings({ fontSize: Math.max(9, settings.fontSize - 1) }), 'font zoom'),
@@ -646,6 +672,22 @@ export default function App() {
           ))}
         </div>
         <div className="grow" />
+        <div className="topbar-actions nodrag">
+          <button className="search-pill" title="搜索服务器、标签页或任何操作" onClick={() => setPalette('all')}>
+            <IconSearch size={13} />
+            <span>搜索或执行命令</span>
+            <kbd>⌘⇧P</kbd>
+          </button>
+          <button className="icon-btn" title="新功能介绍" onClick={() => setWhatsNew(true)}>
+            <IconSparkle />
+          </button>
+          <button className="icon-btn" title="快捷键一览 (⌘/)" onClick={() => setShortcutsOpen(true)}>
+            <IconHelp />
+          </button>
+          <button className="icon-btn" title="设置 (⌘,)" onClick={() => setSettingsOpen('appearance')}>
+            <IconGear />
+          </button>
+        </div>
       </div>
       <div className="body">
         {sidebarOpen && (
@@ -678,8 +720,43 @@ export default function App() {
                 </button>
                 <button onClick={focusQuickConnect}>快速连接</button>
               </div>
-              <div className="muted small shortcuts">
-                ⌘N 新建会话 · ⌘P 搜索会话 · ⌘⇧P 命令面板 · ⌘D 拆分终端 · ⌘, 设置
+              <div className="welcome-grid">
+                <button className="welcome-card" onClick={() => setPalette('sessions')}>
+                  <IconSearch />
+                  <b>搜索服务器</b>
+                  <span>输入名称或 IP，回车连接</span>
+                  <kbd>⌘P</kbd>
+                </button>
+                <button className="welcome-card" onClick={() => setPalette('all')}>
+                  <IconCommand />
+                  <b>命令面板</b>
+                  <span>搜索并执行任何操作</span>
+                  <kbd>⌘⇧P</kbd>
+                </button>
+                <button className="welcome-card" onClick={() => setSettingsOpen('quick')}>
+                  <IconBolt />
+                  <b>Quick Terminal</b>
+                  <span>全局快捷键呼出下拉终端</span>
+                  <kbd>设置</kbd>
+                </button>
+                <button className="welcome-card" onClick={() => setSettingsOpen('appearance')}>
+                  <IconGear />
+                  <b>外观与主题</b>
+                  <span>深浅色、终端配色、透明度</span>
+                  <kbd>⌘,</kbd>
+                </button>
+                <button className="welcome-card" onClick={() => setWhatsNew(true)}>
+                  <IconSparkle />
+                  <b>新功能介绍</b>
+                  <span>分屏、通知、在线编辑…</span>
+                  <kbd>帮助</kbd>
+                </button>
+                <button className="welcome-card" onClick={() => setShortcutsOpen(true)}>
+                  <IconHelp />
+                  <b>快捷键一览</b>
+                  <span>所有快捷键</span>
+                  <kbd>⌘/</kbd>
+                </button>
               </div>
             </div>
           )}
@@ -713,6 +790,54 @@ export default function App() {
                     {t.status === 'closed' && '已断开'}
                     {t.status === 'error' && '连接失败'}
                   </span>
+                  <span className="grow" />
+                  {t.protocol === 'ssh' && t.view !== 'files' && (
+                    <div className="tool-buttons">
+                      <button className="tb-btn" title="向右拆分终端 (⌘D)" onClick={() => (setActiveKey(t.key), splitFocused('row'))}>
+                        <IconSplitRight />
+                        <span>向右拆分</span>
+                      </button>
+                      <button className="tb-btn" title="向下拆分终端 (⌘⇧D)" onClick={() => (setActiveKey(t.key), splitFocused('col'))}>
+                        <IconSplitDown />
+                        <span>向下拆分</span>
+                      </button>
+                      {leaves(t.tree).length > 1 && (
+                        <button
+                          className={'tb-btn' + (t.zoomed ? ' on' : '')}
+                          title="放大 / 还原当前分屏 (⌘⇧↩)"
+                          onClick={() => updateTab(t.key, (x) => ({ zoomed: x.zoomed ? null : x.focusedPane }))}
+                        >
+                          <IconZoom />
+                        </button>
+                      )}
+                      <button className="tb-btn" title="在终端中查找 (⌘F)" onClick={() => emitCommand('find')}>
+                        <IconSearch />
+                      </button>
+                      <button
+                        className="tb-btn"
+                        title="更多操作"
+                        onClick={(e) => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          const multi = leaves(t.tree).length > 1
+                          setMoreMenu({
+                            x: r.left,
+                            y: r.bottom + 4,
+                            items: [
+                              { label: '清屏  ⌘L', onClick: () => emitCommand('clear') },
+                              { label: '将终端输出保存为文件…  ⌘⇧S', onClick: () => emitCommand('save-output') },
+                              { type: 'separator' },
+                              { label: '均分所有分屏  ⌘⌃=', disabled: !multi, onClick: () => updateTab(t.key, (x) => ({ tree: equalize(x.tree) })) },
+                              { label: '关闭当前分屏  ⌘W', disabled: !multi, onClick: () => void closePane(t.key, t.focusedPane) },
+                              { type: 'separator' },
+                              { label: '终端设置…', onClick: () => setSettingsOpen('terminal') }
+                            ]
+                          })
+                        }}
+                      >
+                        <IconMore />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {t.protocol === 'ftp' ? (
                   <div className="tab-content">
@@ -768,14 +893,30 @@ export default function App() {
         </div>
       </div>
 
+      {whatsNew && (
+        <WhatsNew
+          version={version}
+          onClose={closeWhatsNew}
+          actions={{
+            openPalette: () => setPalette('all'),
+            openSettings: (tab) => setSettingsOpen(tab),
+            splitRight: () => splitFocused('row'),
+            openShortcuts: () => setShortcutsOpen(true),
+            canSplit: !!visibleTabs.find((x) => x.key === activeKey && x.protocol === 'ssh' && x.status === 'connected')
+          }}
+        />
+      )}
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {moreMenu && <ContextMenu {...moreMenu} onClose={() => setMoreMenu(null)} />}
       {settingsOpen && (
         <SettingsDialog
+          initialTab={settingsOpen}
           settings={settings}
           onChange={updateSettings}
           onReset={async () => {
             if (await window.api.ui.confirm('恢复所有设置为默认值？')) await window.api.settings.reset()
           }}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => setSettingsOpen(null)}
         />
       )}
       {palette && (

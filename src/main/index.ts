@@ -170,6 +170,24 @@ function buildMenu(): void {
         { role: 'zoom', label: '缩放' },
         ...(isMac ? [{ type: 'separator' as const }, { role: 'front' as const, label: '前置全部窗口' }] : [])
       ]
+    },
+    {
+      role: 'help',
+      label: '帮助',
+      submenu: [
+        { label: '新功能介绍', click: sendCmd('whats-new') },
+        { label: '快捷键一览', accelerator: 'CmdOrCtrl+/', click: sendCmd('shortcuts') },
+        { label: '命令面板…', click: sendCmd('palette') },
+        { type: 'separator' },
+        {
+          label: '使用说明（GitHub）',
+          click: () => void shell.openExternal('https://github.com/flight123-cloud/SSHub#readme')
+        },
+        {
+          label: '下载最新版本',
+          click: () => void shell.openExternal('https://github.com/flight123-cloud/SSHub/releases/latest')
+        }
+      ]
     }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
@@ -288,6 +306,10 @@ function registerIpc(): void {
   handle('settings:get', () => getSettings())
   handle('settings:set', (patch: Partial<AppSettings>) => updateSettings(patch))
   handle('settings:reset', () => resetSettings())
+  handle('app:openUrl', (url: string) => {
+    // 只允许打开项目主页等 https 链接
+    if (/^https:\/\/github\.com\/flight123-cloud\/SSHub/i.test(url)) void shell.openExternal(url)
+  })
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform }))
 }
 

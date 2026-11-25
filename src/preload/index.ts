@@ -87,6 +87,11 @@ const api = {
     pathForFile: (f: File) => webUtils.getPathForFile(f)
   },
 
+  app: {
+    info: () => call<{ version: string; platform: string }>('app:info'),
+    openUrl: (url: string) => call<void>('app:openUrl', url)
+  },
+
   quick: {
     toggle: () => call<void>('quick:toggle'),
     hide: () => call<void>('quick:hide'),

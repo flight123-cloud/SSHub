@@ -211,6 +211,8 @@ export interface AppSettings {
   /** 关闭标签页后可撤销的秒数（0 = 不可撤销） */
   undoCloseSeconds: number
   confirmCloseConnected: boolean
+  /** 已看过「新功能导览」的版本号（升级后自动再弹出） */
+  lastSeenVersion: string
   /** 双击远程文本文件：编辑 / 下载 */
   doubleClickText: 'edit' | 'download'
   showHiddenFiles: boolean
@@ -249,6 +251,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quickTerminalHeight: 45,
   quickTerminalAutoHide: true,
   confirmCloseConnected: true,
+  lastSeenVersion: '',
   doubleClickText: 'edit',
   showHiddenFiles: false
 }

@@ -1,7 +1,7 @@
 {
   "name": "sshub",
   "productName": "SSHub",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "SSH 终端 + SFTP 文件传输工具",
   "main": "./out/main/index.js",
   "author": "SSHub",
