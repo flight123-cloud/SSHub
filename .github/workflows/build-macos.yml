@@ -4,7 +4,10 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
+    # 只改了官网或文档时不需要重新打包
+    paths-ignore: ['site/**', '.github/workflows/pages.yml', '**/*.md']
   pull_request:
+    paths-ignore: ['site/**', '.github/workflows/pages.yml', '**/*.md']
   workflow_dispatch:
 
 permissions:

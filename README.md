@@ -2,6 +2,8 @@
 
 SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，相当于把 Xshell 和 Xftp 合在一个应用里。
 
+**官网：https://flight123-cloud.github.io/SSHub/**
+
 <p align="center"><img src="build/icon.png" width="128" alt="SSHub 图标"></p>
 
 ## 功能
@@ -129,6 +131,7 @@ npm run dist:mac   # 打包 macOS dmg（需要在 Mac 上执行）
 每次推送代码后，GitHub Actions 会自动在 macOS 上构建 dmg。推送 `v*` 格式的标签（例如 `v0.1.0`）时，还会自动发布 Release。
 
 ```
+site/         官网（GitHub Pages，推送到 main 后自动部署）
 src/
   main/       主进程
     ssh.ts          SSH 连接与终端
