@@ -68,11 +68,28 @@ jobs:
             dist/*.zip
           if-no-files-found: error
 
-      - name: Publish release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.runner == 'macos-latest'
+  release:
+    # 打 v* 标签时发布 Release：使用任一构建成功的运行器产出的安装包
+    needs: build
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: SSHub-macOS-built-on-*
+          path: artifacts
+
+      - name: Pick one successful build
+        run: |
+          mkdir -p release
+          src=$(ls -d artifacts/*/ 2>/dev/null | head -n 1)
+          if [ -z "$src" ]; then echo "没有成功的构建产物"; exit 1; fi
+          echo "Using $src"
+          cp "$src"*.dmg "$src"*.zip release/
+          ls -lh release
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.dmg
-            dist/*.zip
+          files: release/*
           generate_release_notes: true
