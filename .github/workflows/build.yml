@@ -1,4 +1,4 @@
-name: Build macOS
+name: Build
 
 on:
   push:
@@ -71,24 +71,68 @@ jobs:
             dist/*.zip
           if-no-files-found: error
 
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build Windows app (x64 + arm64)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:win
+
+      - name: List artifacts
+        shell: pwsh
+        run: Get-ChildItem dist -File | Format-Table Name, Length
+
+      - name: Smoke test (launch x64 app)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\win-unpacked\SSHub.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) { Write-Error "App exited early (code $($p.ExitCode))"; exit 1 }
+          Write-Host "App is running"
+          Get-Process -Name SSHub -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSHub-Windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+
   release:
-    # 打 v* 标签时发布 Release：使用任一构建成功的运行器产出的安装包
-    needs: build
+    # 打 v* 标签时发布 Release：macOS 取任一构建成功的运行器产出的安装包，再加上 Windows 安装包
+    needs: [build, build-windows]
     if: always() && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: SSHub-macOS-built-on-*
+          pattern: SSHub-*
           path: artifacts
 
-      - name: Pick one successful build
+      - name: Collect installers
         run: |
           mkdir -p release
-          src=$(ls -d artifacts/*/ 2>/dev/null | head -n 1)
-          if [ -z "$src" ]; then echo "没有成功的构建产物"; exit 1; fi
-          echo "Using $src"
-          cp "$src"*.dmg "$src"*.zip release/
+          mac=$(ls -d artifacts/SSHub-macOS-built-on-*/ 2>/dev/null | head -n 1)
+          if [ -n "$mac" ]; then echo "macOS from $mac"; cp "$mac"*.dmg "$mac"*.zip release/; else echo "::warning::没有 macOS 安装包"; fi
+          if [ -d artifacts/SSHub-Windows ]; then cp artifacts/SSHub-Windows/* release/; else echo "::warning::没有 Windows 安装包"; fi
+          if [ -z "$(ls release)" ]; then echo "没有任何成功的构建产物"; exit 1; fi
           ls -lh release
 
       - name: Publish release

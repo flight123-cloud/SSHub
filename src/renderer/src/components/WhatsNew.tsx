@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
 import { Modal } from './Modal'
+import { IS_MAC, k, kx } from '../keys'
+import { formatAccel } from '../../../shared/keymap'
+import { getSettings } from '../settings'
 import type { SettingsTab } from './SettingsDialog'
 import { IconBolt, IconCommand, IconHelp, IconSparkle, IconSplitRight } from './Icons'
 
@@ -44,14 +47,14 @@ export function WhatsNew(props: { version: string; actions: TourActions; onClose
       icon: <IconCommand />,
       tag: '最常用',
       desc: '不用记菜单和快捷键：搜索服务器直接连接，或者搜索任何操作并执行，例如输入「拆分」「主题」「通知」。',
-      keys: ['⌘P 搜索服务器', '⌘⇧P 搜索操作'],
+      keys: [`${k('palette-sessions')} 搜索服务器`, `${k('palette')} 搜索操作`],
       action: { label: '打开命令面板', run: go(a.openPalette) }
     },
     {
       title: '终端分屏',
       icon: <IconSplitRight />,
       desc: '一个标签页里同时开多个终端，比如一边看日志一边操作。终端上方工具栏也有拆分按钮。',
-      keys: ['⌘D 向右拆分', '⌘⇧D 向下拆分', '⌘⌥方向键 切换', '⌘⇧↩ 放大', '⌘W 关闭分屏'],
+      keys: [`${k('split-right')} 向右拆分`, `${k('split-down')} 向下拆分`, `${kx('⌘⌥')}方向键 切换`, `${k('zoom-pane')} 放大`, `${k('close-tab')} 关闭分屏`],
       action: {
         label: '在当前终端向右拆分',
         run: go(a.splitRight),
@@ -62,7 +65,7 @@ export function WhatsNew(props: { version: string; actions: TourActions; onClose
       title: 'Quick Terminal 下拉终端',
       icon: <IconBolt />,
       desc: '在任何应用里按全局快捷键，终端从屏幕顶部滑出，自动连接常用服务器；再按一次收起。需要先在设置里开启。',
-      keys: ['默认 ⌃`（可自定义）'],
+      keys: [`默认 ${formatAccel(getSettings().quickTerminalHotkey, IS_MAC)}（可自定义）`],
       action: { label: '去设置开启', run: go(() => a.openSettings('quick')) }
     },
     {
@@ -79,7 +82,7 @@ export function WhatsNew(props: { version: string; actions: TourActions; onClose
     {
       title: '撤销关闭标签页',
       desc: '误关了标签页？10 秒内恢复，连接不会断开，终端内容也还在。',
-      keys: ['⌘Z', '⌘⇧T']
+      keys: IS_MAC ? ['⌘Z', k('reopen-tab')] : [k('reopen-tab')]
     },
     {
       title: '更安全的粘贴与剪贴板',
@@ -90,7 +93,7 @@ export function WhatsNew(props: { version: string; actions: TourActions; onClose
       title: '在线编辑服务器文件',
       desc: (
         <>
-          在「文件传输」里<b>双击文本文件</b>直接编辑，⌘S 保存回服务器；任意文件可以右键「用本地应用打开」，用 VS Code
+          在「文件传输」里<b>双击文本文件</b>直接编辑，{kx('⌘S')} 保存回服务器；任意文件可以右键「用本地应用打开」，用 VS Code
           等编辑，保存后自动上传。
         </>
       )
@@ -103,8 +106,8 @@ export function WhatsNew(props: { version: string; actions: TourActions; onClose
     {
       title: '快捷键与帮助',
       icon: <IconHelp />,
-      desc: '按 ⌘/ 查看全部快捷键。菜单栏「帮助 → 新功能介绍」可以随时再次打开这个页面。',
-      keys: ['⌘/ 快捷键一览', '⌘, 设置'],
+      desc: `按 ${k('shortcuts')} 查看全部快捷键。菜单「帮助 → 新功能介绍」可以随时再次打开这个页面。`,
+      keys: [`${k('shortcuts')} 快捷键一览`, `${k('settings')} 设置`],
       action: { label: '查看快捷键', run: go(a.openShortcuts) }
     }
   ]
@@ -151,60 +154,69 @@ export function WhatsNew(props: { version: string; actions: TourActions; onClose
   )
 }
 
-const SHORTCUTS: [string, [string, string][]][] = [
-  [
-    '连接与标签页',
+function shortcuts(): [string, [string, string][]][] {
+  const join = (...xs: string[]): string => xs.join(' / ')
+  return [
     [
-      ['⌘N', '新建会话'],
-      ['⌘K', '快速连接'],
-      ['⌘P', '搜索服务器 / 标签页'],
-      ['⌘⇧P', '命令面板（搜索任何操作）'],
-      ['⌘W', '关闭分屏 / 标签页'],
-      ['⌘Z / ⌘⇧T', '撤销关闭标签页'],
-      ['⌘⇧[ / ⌘⇧]', '上一个 / 下一个标签页'],
-      ['⌘B', '显示 / 隐藏会话列表']
-    ]
-  ],
-  [
-    '终端',
+      '连接与标签页',
+      [
+        [k('new-session'), '新建会话'],
+        [k('quick-connect'), '快速连接'],
+        [k('palette-sessions'), '搜索服务器 / 标签页'],
+        [k('palette'), '命令面板（搜索任何操作）'],
+        [k('close-tab'), '关闭分屏 / 标签页'],
+        [IS_MAC ? join('⌘Z', k('reopen-tab')) : k('reopen-tab'), '撤销关闭标签页'],
+        [join(k('prev-tab'), k('next-tab')), '上一个 / 下一个标签页'],
+        [k('toggle-sidebar'), '显示 / 隐藏会话列表']
+      ]
+    ],
     [
-      ['⌘1 / ⌘2 / ⌘3', '终端 / 文件传输 / 终端+文件'],
-      ['⌘F', '查找'],
-      ['⌘L', '清屏'],
-      ['⌘⇧S', '将终端输出保存为文件'],
-      ['⌘+ / ⌘- / ⌘0', '放大 / 缩小 / 重置字体']
-    ]
-  ],
-  [
-    '分屏',
+      '终端',
+      [
+        [join(k('view-terminal'), k('view-files'), k('view-split')), '终端 / 文件传输 / 终端+文件'],
+        [k('find'), '查找'],
+        [k('clear'), '清屏'],
+        [k('save-output'), '将终端输出保存为文件'],
+        [join(k('font-bigger'), k('font-smaller'), k('font-reset')), '放大 / 缩小 / 重置字体'],
+        ...(IS_MAC
+          ? []
+          : ([
+              [join(k('term-copy'), 'Ctrl+C（有选中文字时）'), '复制'],
+              [join(k('term-paste'), 'Ctrl+V'), '粘贴']
+            ] as [string, string][]))
+      ]
+    ],
     [
-      ['⌘D', '向右拆分'],
-      ['⌘⇧D', '向下拆分'],
-      ['⌘⌥ 方向键', '切换到相邻分屏'],
-      ['⌘[ / ⌘]', '上一个 / 下一个分屏'],
-      ['⌘⇧↩', '放大 / 还原当前分屏'],
-      ['⌘⌃=', '均分所有分屏']
-    ]
-  ],
-  [
-    '文件与编辑器',
+      '分屏',
+      [
+        [k('split-right'), '向右拆分'],
+        [k('split-down'), '向下拆分'],
+        [kx('⌘⌥') + ' 方向键', '切换到相邻分屏'],
+        [join(k('pane-prev'), k('pane-next')), '上一个 / 下一个分屏'],
+        [k('zoom-pane'), '放大 / 还原当前分屏'],
+        [k('equalize-panes'), '均分所有分屏']
+      ]
+    ],
     [
-      ['双击文本文件', '在线编辑'],
-      ['⌘S', '保存到服务器'],
-      ['⌘F / ⌘G', '查找替换 / 跳转到行'],
-      ['⌘A', '全选文件'],
-      ['⌘⌫', '删除选中文件']
-    ]
-  ],
-  [
-    '其他',
+      '文件与编辑器',
+      [
+        ['双击文本文件', '在线编辑'],
+        [kx('⌘S'), '保存到服务器'],
+        [join(kx('⌘F'), kx('⌘G')), '查找替换 / 跳转到行'],
+        [kx('⌘A'), '全选文件'],
+        [kx('⌘⌫'), '删除选中文件']
+      ]
+    ],
     [
-      ['⌘,', '设置'],
-      ['⌘/', '快捷键一览'],
-      ['自定义（默认 ⌃`）', 'Quick Terminal（需在设置中开启）']
+      '其他',
+      [
+        [k('settings'), '设置'],
+        [k('shortcuts'), '快捷键一览'],
+        [`自定义（当前 ${formatAccel(getSettings().quickTerminalHotkey, IS_MAC)}）`, 'Quick Terminal（需在设置中开启）']
+      ]
     ]
   ]
-]
+}
 
 export function ShortcutsDialog(props: { onClose: () => void }) {
   return (
@@ -219,7 +231,7 @@ export function ShortcutsDialog(props: { onClose: () => void }) {
       }
     >
       <div className="shortcut-grid">
-        {SHORTCUTS.map(([group, items]) => (
+        {shortcuts().map(([group, items]) => (
           <div key={group} className="shortcut-group">
             <div className="shortcut-title">{group}</div>
             {items.map(([k, d]) => (

@@ -78,7 +78,7 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei', sans-serif;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Helvetica Neue', sans-serif;
   user-select: none;
   -webkit-font-smoothing: antialiased;
 }
@@ -650,7 +650,7 @@ select.input {
 }
 .path-input {
   margin: 0 4px;
-  font-family: 'SF Mono', Menlo, monospace;
+  font-family: 'SF Mono', Menlo, 'Cascadia Mono', Consolas, monospace;
   font-size: 12px;
   padding: 3px 6px;
 }
@@ -725,7 +725,7 @@ select.input {
   text-align: right;
 }
 .c-perm {
-  font-family: 'SF Mono', Menlo, monospace;
+  font-family: 'SF Mono', Menlo, 'Cascadia Mono', Consolas, monospace;
   font-size: 11px;
 }
 .pane-foot {
@@ -976,7 +976,7 @@ select.input {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px;
-  font: 13px/1.5 'SF Mono', Menlo, monospace;
+  font: 13px/1.5 'SF Mono', Menlo, 'Cascadia Mono', Consolas, monospace;
   outline: none;
   user-select: text;
   tab-size: 2;
@@ -1210,7 +1210,7 @@ input[type='range'] {
   border-radius: 8px;
   background: var(--overlay-bg);
   border: 1px solid var(--border);
-  font: 600 15px 'SF Mono', Menlo, monospace;
+  font: 600 15px 'SF Mono', Menlo, 'Cascadia Mono', Consolas, monospace;
   color: var(--text);
   pointer-events: none;
   z-index: 6;
@@ -1223,7 +1223,7 @@ input[type='range'] {
   border-radius: var(--radius);
   background: var(--bg-term);
   border: 1px solid var(--border);
-  font: 12px/1.5 'SF Mono', Menlo, monospace;
+  font: 12px/1.5 'SF Mono', Menlo, 'Cascadia Mono', Consolas, monospace;
   white-space: pre-wrap;
   word-break: break-all;
   user-select: text;
@@ -1348,7 +1348,7 @@ input[type='range'] {
 }
 .theme-preview {
   padding: 7px 8px;
-  font: 10.5px/1.5 'SF Mono', Menlo, monospace;
+  font: 10.5px/1.5 'SF Mono', Menlo, 'Cascadia Mono', Consolas, monospace;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1769,4 +1769,20 @@ body.dragging-row * {
 }
 .menu-item {
   white-space: nowrap;
+}
+
+/* ---------- Windows 窗口 ---------- */
+/* 系统的最小化 / 最大化 / 关闭按钮叠在顶栏右侧，宽度约 138px */
+.app.win .topbar {
+  padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)) + 6px);
+}
+.app-menu-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+}
+.app-menu-btn img {
+  border-radius: 4px;
 }

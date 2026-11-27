@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { KEYCHAIN } from '../keys'
 import { ENCODING_LABELS, type AuthType, type Encoding, type FtpSecurity, type Protocol, type SessionInfo, type SessionInput } from '../../../shared/types'
 import { Modal } from './Modal'
 import { errMsg } from '../util'
@@ -254,7 +255,7 @@ export function SessionDialog(props: {
         <div className="warn-note small">明文 FTP 不加密，密码和文件内容在网络上可被截获。服务器支持的话建议选择 FTPS。</div>
       )}
       <div className="muted small" style={{ marginTop: 12 }}>
-        密码和口令使用 macOS 钥匙串加密后保存在本机。
+        密码和口令使用 {KEYCHAIN} 加密后保存在本机。
       </div>
     </Modal>
   )

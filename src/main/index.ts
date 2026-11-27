@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, clipboard } from 'ele
 import fs from 'fs'
 import path from 'path'
 import type { ApiResult, AppSettings, Encoding } from '../shared/types'
+import { accelerator, type KeyId } from '../shared/keymap'
 import * as ssh from './ssh'
 import * as ftp from './ftp'
 import * as conns from './connections'
@@ -17,6 +18,22 @@ app.setName('SSHub')
 // 便于测试时隔离数据目录
 if (process.env.SSHUB_USER_DATA) app.setPath('userData', process.env.SSHUB_USER_DATA)
 
+const IS_WIN = process.platform === 'win32'
+// Windows：系统通知需要应用 ID（与安装包的 appId 一致）
+if (IS_WIN) app.setAppUserModelId('io.github.sshub.app')
+
+// 只允许运行一个实例：再次打开时把已有窗口带到前面
+if (!process.env.SSHUB_USER_DATA && !app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+}
+
 let win: BrowserWindow | null = null
 
 function createWindow(): void {
@@ -27,8 +44,12 @@ function createWindow(): void {
     minHeight: 560,
     title: 'SSHub',
     backgroundColor: '#1e1f24',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 14, y: 14 },
+    // macOS：红黄绿按钮嵌在顶栏里；Windows：隐藏标题栏，系统的最小化/最大化/关闭按钮叠在顶栏右侧
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 14 } }
+      : IS_WIN
+        ? { titleBarStyle: 'hidden' as const, titleBarOverlay: { color: '#24262c', symbolColor: '#d8dae0', height: 40 } }
+        : {}),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -68,6 +89,7 @@ function createWindow(): void {
 
 function buildMenu(): void {
   const isMac = process.platform === 'darwin'
+  const k = (id: KeyId): string | undefined => accelerator(id, isMac)
   // 菜单命令发给当前聚焦的窗口（主窗口或 Quick Terminal）
   const sendCmd = (cmd: string) => () => (BrowserWindow.getFocusedWindow() ?? win)?.webContents.send('menu:command', cmd)
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -78,7 +100,7 @@ function buildMenu(): void {
             submenu: [
               { role: 'about' as const, label: '关于 SSHub' },
               { type: 'separator' as const },
-              { label: '设置…', accelerator: 'CmdOrCtrl+,', click: sendCmd('settings') },
+              { label: '设置…', accelerator: k('settings'), registerAccelerator: isMac, click: sendCmd('settings') },
               { type: 'separator' as const },
               { role: 'hide' as const, label: '隐藏 SSHub' },
               { role: 'hideOthers' as const, label: '隐藏其他' },
@@ -92,19 +114,19 @@ function buildMenu(): void {
     {
       label: '文件',
       submenu: [
-        { label: '新建会话…', accelerator: 'CmdOrCtrl+N', click: sendCmd('new-session') },
-        { label: '快速连接', accelerator: 'CmdOrCtrl+K', click: sendCmd('quick-connect') },
-        { label: '重新打开关闭的标签页', accelerator: 'CmdOrCtrl+Shift+T', click: sendCmd('reopen-tab') },
-        { label: '搜索会话并连接…', accelerator: 'CmdOrCtrl+P', click: sendCmd('palette-sessions') },
-        { label: '命令面板…', accelerator: 'CmdOrCtrl+Shift+P', click: sendCmd('palette') },
+        { label: '新建会话…', accelerator: k('new-session'), registerAccelerator: isMac, click: sendCmd('new-session') },
+        { label: '快速连接', accelerator: k('quick-connect'), registerAccelerator: isMac, click: sendCmd('quick-connect') },
+        { label: '重新打开关闭的标签页', accelerator: k('reopen-tab'), registerAccelerator: isMac, click: sendCmd('reopen-tab') },
+        { label: '搜索会话并连接…', accelerator: k('palette-sessions'), registerAccelerator: isMac, click: sendCmd('palette-sessions') },
+        { label: '命令面板…', accelerator: k('palette'), registerAccelerator: isMac, click: sendCmd('palette') },
         { label: '显示 / 隐藏 Quick Terminal', click: () => quick.toggle() },
         { type: 'separator' },
-        { label: '关闭分屏 / 标签页', accelerator: 'CmdOrCtrl+W', click: sendCmd('close-tab') },
+        { label: '关闭分屏 / 标签页', accelerator: k('close-tab'), registerAccelerator: isMac, click: sendCmd('close-tab') },
         ...(isMac
           ? []
           : [
               { type: 'separator' as const },
-              { label: '设置…', accelerator: 'CmdOrCtrl+,', click: sendCmd('settings') },
+              { label: '设置…', accelerator: k('settings'), registerAccelerator: isMac, click: sendCmd('settings') },
               { role: 'quit' as const, label: '退出' }
             ])
       ]
@@ -112,51 +134,59 @@ function buildMenu(): void {
     {
       label: '编辑',
       submenu: [
-        { role: 'undo', label: '撤销' },
-        { role: 'redo', label: '重做' },
+        // Windows / Linux 上 Ctrl+Z/X/C/V/A 留给终端（Ctrl+Z 挂起、Ctrl+C 中断……），输入框会自己处理这些键
+        { role: 'undo', label: '撤销', registerAccelerator: isMac },
+        { role: 'redo', label: '重做', registerAccelerator: isMac },
         { type: 'separator' },
-        { role: 'cut', label: '剪切' },
-        { role: 'copy', label: '复制' },
-        { role: 'paste', label: '粘贴' },
-        { role: 'selectAll', label: '全选' },
+        { role: 'cut', label: '剪切', registerAccelerator: isMac },
+        { role: 'copy', label: '复制', registerAccelerator: isMac },
+        { role: 'paste', label: '粘贴', registerAccelerator: isMac },
+        { role: 'selectAll', label: '全选', registerAccelerator: isMac },
+        ...(isMac
+          ? []
+          : [
+              { type: 'separator' as const },
+              { label: '复制（终端）', accelerator: k('term-copy'), registerAccelerator: isMac, click: sendCmd('term-copy') },
+              { label: '粘贴（终端）', accelerator: k('term-paste'), registerAccelerator: isMac, click: sendCmd('term-paste') }
+            ]),
         { type: 'separator' },
-        { label: '查找', accelerator: 'CmdOrCtrl+F', click: sendCmd('find') },
-        { label: '清屏', accelerator: 'CmdOrCtrl+L', click: sendCmd('clear') },
-        { label: '将终端输出保存为文件…', accelerator: 'CmdOrCtrl+Shift+S', click: sendCmd('save-output') }
+        { label: '查找', accelerator: k('find'), registerAccelerator: isMac, click: sendCmd('find') },
+        { label: '清屏', accelerator: k('clear'), registerAccelerator: isMac, click: sendCmd('clear') },
+        { label: '将终端输出保存为文件…', accelerator: k('save-output'), registerAccelerator: isMac, click: sendCmd('save-output') }
       ]
     },
     {
       label: '视图',
       submenu: [
-        { label: '终端', accelerator: 'CmdOrCtrl+1', click: sendCmd('view-terminal') },
-        { label: '文件传输', accelerator: 'CmdOrCtrl+2', click: sendCmd('view-files') },
-        { label: '终端 + 文件', accelerator: 'CmdOrCtrl+3', click: sendCmd('view-split') },
+        { label: '终端', accelerator: k('view-terminal'), registerAccelerator: isMac, click: sendCmd('view-terminal') },
+        { label: '文件传输', accelerator: k('view-files'), registerAccelerator: isMac, click: sendCmd('view-files') },
+        { label: '终端 + 文件', accelerator: k('view-split'), registerAccelerator: isMac, click: sendCmd('view-split') },
         { type: 'separator' },
         {
           label: '终端分屏',
           submenu: [
-            { label: '向右拆分', accelerator: 'CmdOrCtrl+D', click: sendCmd('split-right') },
-            { label: '向下拆分', accelerator: 'CmdOrCtrl+Shift+D', click: sendCmd('split-down') },
+            { label: '向右拆分', accelerator: k('split-right'), registerAccelerator: isMac, click: sendCmd('split-right') },
+            { label: '向下拆分', accelerator: k('split-down'), registerAccelerator: isMac, click: sendCmd('split-down') },
             { type: 'separator' },
-            { label: '放大 / 还原当前分屏', accelerator: 'CmdOrCtrl+Shift+Enter', click: sendCmd('zoom-pane') },
-            { label: '均分所有分屏', accelerator: 'CmdOrCtrl+Control+=', click: sendCmd('equalize-panes') },
+            { label: '放大 / 还原当前分屏', accelerator: k('zoom-pane'), registerAccelerator: isMac, click: sendCmd('zoom-pane') },
+            { label: '均分所有分屏', accelerator: k('equalize-panes'), registerAccelerator: isMac, click: sendCmd('equalize-panes') },
             { type: 'separator' },
-            { label: '切换到左侧分屏', accelerator: 'CmdOrCtrl+Alt+Left', click: sendCmd('pane-left') },
-            { label: '切换到右侧分屏', accelerator: 'CmdOrCtrl+Alt+Right', click: sendCmd('pane-right') },
-            { label: '切换到上方分屏', accelerator: 'CmdOrCtrl+Alt+Up', click: sendCmd('pane-up') },
-            { label: '切换到下方分屏', accelerator: 'CmdOrCtrl+Alt+Down', click: sendCmd('pane-down') },
-            { label: '上一个分屏', accelerator: 'CmdOrCtrl+[', click: sendCmd('pane-prev') },
-            { label: '下一个分屏', accelerator: 'CmdOrCtrl+]', click: sendCmd('pane-next') }
+            { label: '切换到左侧分屏', accelerator: k('pane-left'), registerAccelerator: isMac, click: sendCmd('pane-left') },
+            { label: '切换到右侧分屏', accelerator: k('pane-right'), registerAccelerator: isMac, click: sendCmd('pane-right') },
+            { label: '切换到上方分屏', accelerator: k('pane-up'), registerAccelerator: isMac, click: sendCmd('pane-up') },
+            { label: '切换到下方分屏', accelerator: k('pane-down'), registerAccelerator: isMac, click: sendCmd('pane-down') },
+            { label: '上一个分屏', accelerator: k('pane-prev'), registerAccelerator: isMac, click: sendCmd('pane-prev') },
+            { label: '下一个分屏', accelerator: k('pane-next'), registerAccelerator: isMac, click: sendCmd('pane-next') }
           ]
         },
         { type: 'separator' },
-        { label: '显示/隐藏会话列表', accelerator: 'CmdOrCtrl+B', click: sendCmd('toggle-sidebar') },
-        { label: '放大字体', accelerator: 'CmdOrCtrl+=', click: sendCmd('font-bigger') },
-        { label: '缩小字体', accelerator: 'CmdOrCtrl+-', click: sendCmd('font-smaller') },
-        { label: '重置字体', accelerator: 'CmdOrCtrl+0', click: sendCmd('font-reset') },
+        { label: '显示/隐藏会话列表', accelerator: k('toggle-sidebar'), registerAccelerator: isMac, click: sendCmd('toggle-sidebar') },
+        { label: '放大字体', accelerator: k('font-bigger'), registerAccelerator: isMac, click: sendCmd('font-bigger') },
+        { label: '缩小字体', accelerator: k('font-smaller'), registerAccelerator: isMac, click: sendCmd('font-smaller') },
+        { label: '重置字体', accelerator: k('font-reset'), registerAccelerator: isMac, click: sendCmd('font-reset') },
         { type: 'separator' },
-        { label: '上一个标签页', accelerator: 'CmdOrCtrl+Shift+[', click: sendCmd('prev-tab') },
-        { label: '下一个标签页', accelerator: 'CmdOrCtrl+Shift+]', click: sendCmd('next-tab') },
+        { label: '上一个标签页', accelerator: k('prev-tab'), registerAccelerator: isMac, click: sendCmd('prev-tab') },
+        { label: '下一个标签页', accelerator: k('next-tab'), registerAccelerator: isMac, click: sendCmd('next-tab') },
         { type: 'separator' },
         { role: 'togglefullscreen', label: '全屏' },
         ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }])
@@ -176,7 +206,7 @@ function buildMenu(): void {
       label: '帮助',
       submenu: [
         { label: '新功能介绍', click: sendCmd('whats-new') },
-        { label: '快捷键一览', accelerator: 'CmdOrCtrl+/', click: sendCmd('shortcuts') },
+        { label: '快捷键一览', accelerator: k('shortcuts'), registerAccelerator: isMac, click: sendCmd('shortcuts') },
         { label: '命令面板…', click: sendCmd('palette') },
         { type: 'separator' },
         {
@@ -309,6 +339,16 @@ function registerIpc(): void {
   handle('app:openUrl', (url: string) => {
     // 只允许打开项目主页等 https 链接
     if (/^https:\/\/github\.com\/flight123-cloud\/SSHub/i.test(url)) void shell.openExternal(url)
+  })
+  // Windows 顶栏没有菜单栏：左上角按钮弹出应用菜单
+  handleWithSender('app:popupMenu', (sender, x, y) => {
+    const w = BrowserWindow.fromWebContents(sender) ?? undefined
+    Menu.getApplicationMenu()?.popup({ window: w, x: Math.round(Number(x)), y: Math.round(Number(y)) })
+  })
+  // 标题栏按钮配色跟随深浅色主题
+  handleWithSender('app:titlebarColors', (sender, bg, fg) => {
+    const w = BrowserWindow.fromWebContents(sender)
+    if (IS_WIN && w && !w.isDestroyed()) w.setTitleBarOverlay({ color: String(bg), symbolColor: String(fg), height: 40 })
   })
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform }))
 }

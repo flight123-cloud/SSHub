@@ -16,6 +16,8 @@ import { IconCommand, IconGear, IconHelp, IconMore, IconSearch, IconSparkle, Ico
 import { CommandPalette, type PaletteItem } from './components/CommandPalette'
 import { getSettings, updateSettings, useIsDark, useSettings } from './settings'
 import { useTerminalTheme } from './themes'
+import { IS_MAC, IS_WIN, k } from './keys'
+import { onAppCommand } from './keybindings'
 import { errMsg, parseQuick, uid } from './util'
 
 type View = 'terminal' | 'files' | 'split'
@@ -79,6 +81,12 @@ export default function App() {
   const settings = useSettings()
   const isDark = useIsDark()
   const termTheme = useTerminalTheme(settings, isDark)
+  // Windows：标题栏右侧的系统按钮跟随深浅色
+  useEffect(() => {
+    if (!IS_WIN) return
+    const css = getComputedStyle(document.documentElement)
+    void window.api.app.titlebarColors(css.getPropertyValue('--bg-2').trim() || '#24262c', css.getPropertyValue('--text').trim() || '#d8dae0')
+  }, [isDark])
   const [settingsOpen, setSettingsOpen] = useState<SettingsTab | null>(null)
   const [whatsNew, setWhatsNew] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -384,7 +392,7 @@ export default function App() {
     if (st.undoCloseSeconds <= 0) return removeTab(key)
     // 先隐藏，连接保持；超时后才真正关闭
     updateTab(key, { closedAt: Date.now() })
-    const toast = notify(`已关闭「${tab.title}」`, false, { label: '撤销 ⌘Z', run: () => reopenTab(key) }, st.undoCloseSeconds * 1000)
+    const toast = notify(`已关闭「${tab.title}」`, false, { label: `撤销 ${IS_MAC ? '⌘Z' : k('reopen-tab')}`, run: () => reopenTab(key) }, st.undoCloseSeconds * 1000)
     const timer = window.setTimeout(() => removeTab(key), st.undoCloseSeconds * 1000)
     undoTimers.current.set(key, { timer, toast })
   }
@@ -408,7 +416,8 @@ export default function App() {
   // ⌘Z：焦点在终端（而不是输入框 / 编辑器）时撤销关闭标签页
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return
+      // 只在 macOS 上用 ⌘Z；Windows / Linux 的 Ctrl+Z 在终端里是挂起程序，必须交给终端
+      if (!IS_MAC || !e.metaKey || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return
       const el = document.activeElement as HTMLElement | null
       const inTerminal = !el || el === document.body || el.classList.contains('xterm-helper-textarea')
       if (!inTerminal || !tabsRef.current.some((t) => t.closedAt)) return
@@ -437,7 +446,7 @@ export default function App() {
   // 菜单命令
   useEffect(
     () =>
-      window.api.ui.onMenu((cmd) => {
+      onAppCommand((cmd) => {
         const active = tabsRef.current.find((t) => t.key === activeRef.current)
         switch (cmd) {
           case 'new-session':
@@ -583,16 +592,16 @@ export default function App() {
       run
     })
     const actions: PaletteItem[] = [
-      cmd('new-session', '新建会话', '⌘N', () => setEditing({}), 'new add'),
-      cmd('quick', '快速连接', '⌘K', focusQuickConnect, 'quick connect'),
-      cmd('settings', '打开设置', '⌘,', () => setSettingsOpen('appearance'), 'settings preferences 偏好'),
+      cmd('new-session', '新建会话', k('new-session'), () => setEditing({}), 'new add'),
+      cmd('quick', '快速连接', k('quick-connect'), focusQuickConnect, 'quick connect'),
+      cmd('settings', '打开设置', k('settings'), () => setSettingsOpen('appearance'), 'settings preferences 偏好'),
       cmd('whats-new', '新功能介绍', undefined, () => setWhatsNew(true), "what's new help 帮助 引导 介绍"),
-      cmd('shortcuts', '快捷键一览', '⌘/', () => setShortcutsOpen(true), 'shortcuts keys help 帮助 快捷键'),
-      cmd('sidebar', sidebarOpen ? '隐藏会话列表' : '显示会话列表', '⌘B', () => setSidebarOpen(!sidebarOpen), 'sidebar'),
-      cmd('font+', '放大字体', '⌘+', () => updateSettings({ fontSize: Math.min(32, settings.fontSize + 1) }), 'font zoom'),
-      cmd('font-', '缩小字体', '⌘-', () => updateSettings({ fontSize: Math.max(9, settings.fontSize - 1) }), 'font zoom'),
-      cmd('font0', '重置字体大小', '⌘0', () => updateSettings({ fontSize: 14 }), 'font zoom'),
-      cmd('reopen', '重新打开关闭的标签页', '⌘⇧T', () => void reopenTab(), 'undo reopen 撤销'),
+      cmd('shortcuts', '快捷键一览', k('shortcuts'), () => setShortcutsOpen(true), 'shortcuts keys help 帮助 快捷键'),
+      cmd('sidebar', sidebarOpen ? '隐藏会话列表' : '显示会话列表', k('toggle-sidebar'), () => setSidebarOpen(!sidebarOpen), 'sidebar'),
+      cmd('font+', '放大字体', k('font-bigger'), () => updateSettings({ fontSize: Math.min(32, settings.fontSize + 1) }), 'font zoom'),
+      cmd('font-', '缩小字体', k('font-smaller'), () => updateSettings({ fontSize: Math.max(9, settings.fontSize - 1) }), 'font zoom'),
+      cmd('font0', '重置字体大小', k('font-reset'), () => updateSettings({ fontSize: 14 }), 'font zoom'),
+      cmd('reopen', '重新打开关闭的标签页', k('reopen-tab'), () => void reopenTab(), 'undo reopen 撤销'),
       cmd('quick', '显示 / 隐藏 Quick Terminal', undefined, () => void window.api.quick.toggle(), 'quick terminal dropdown 下拉 快捷终端'),
       cmd('appearance-dark', '切换到深色外观', undefined, () => updateSettings({ appearance: 'dark' }), 'theme dark 主题 外观'),
       cmd('appearance-light', '切换到浅色外观', undefined, () => updateSettings({ appearance: 'light' }), 'theme light 主题 外观'),
@@ -601,23 +610,23 @@ export default function App() {
     if (activeTab) {
       if (activeTab.protocol === 'ssh') {
         actions.push(
-          cmd('v-term', '切换到终端', '⌘1', () => updateTab(activeTab.key, { view: 'terminal' }), 'terminal view'),
-          cmd('v-files', '切换到文件传输', '⌘2', () => updateTab(activeTab.key, { view: 'files' }), 'files sftp view'),
-          cmd('v-split', '终端 + 文件传输同时显示', '⌘3', () => updateTab(activeTab.key, { view: 'split' }), 'split view'),
-          cmd('split-right', '向右拆分终端', '⌘D', () => splitFocused('row'), 'split pane 分屏'),
-          cmd('split-down', '向下拆分终端', '⌘⇧D', () => splitFocused('col'), 'split pane 分屏'),
-          cmd('find', '在终端中查找', '⌘F', () => emitCommand('find'), 'search find'),
-          cmd('clear', '清屏', '⌘L', () => emitCommand('clear'), 'clear'),
-          cmd('save-output', '将终端输出保存为文件', '⌘⇧S', () => emitCommand('save-output'), 'save export log')
+          cmd('v-term', '切换到终端', k('view-terminal'), () => updateTab(activeTab.key, { view: 'terminal' }), 'terminal view'),
+          cmd('v-files', '切换到文件传输', k('view-files'), () => updateTab(activeTab.key, { view: 'files' }), 'files sftp view'),
+          cmd('v-split', '终端 + 文件传输同时显示', k('view-split'), () => updateTab(activeTab.key, { view: 'split' }), 'split view'),
+          cmd('split-right', '向右拆分终端', k('split-right'), () => splitFocused('row'), 'split pane 分屏'),
+          cmd('split-down', '向下拆分终端', k('split-down'), () => splitFocused('col'), 'split pane 分屏'),
+          cmd('find', '在终端中查找', k('find'), () => emitCommand('find'), 'search find'),
+          cmd('clear', '清屏', k('clear'), () => emitCommand('clear'), 'clear'),
+          cmd('save-output', '将终端输出保存为文件', k('save-output'), () => emitCommand('save-output'), 'save export log')
         )
       }
       const sess = sessions.find((x) => x.id === activeTab.sessionId)
       if (sess) actions.push(cmd('edit-session', `编辑会话「${sess.name}」`, undefined, () => setEditing({ session: sess }), 'edit'))
       if (activeTab.protocol === 'ssh' && leaves(activeTab.tree).length > 1) {
         actions.push(
-          cmd('zoom', activeTab.zoomed ? '还原分屏' : '放大当前分屏', '⌘⇧↩', () => updateTab(activeTab.key, (x) => ({ zoomed: x.zoomed ? null : x.focusedPane })), 'zoom pane 分屏'),
-          cmd('equalize', '均分所有分屏', '⌘⌃=', () => updateTab(activeTab.key, (x) => ({ tree: equalize(x.tree) })), 'equalize pane 分屏'),
-          cmd('close-pane', '关闭当前分屏', '⌘W', () => void closePane(activeTab.key, activeTab.focusedPane), 'close pane 分屏')
+          cmd('zoom', activeTab.zoomed ? '还原分屏' : '放大当前分屏', k('zoom-pane'), () => updateTab(activeTab.key, (x) => ({ zoomed: x.zoomed ? null : x.focusedPane })), 'zoom pane 分屏'),
+          cmd('equalize', '均分所有分屏', k('equalize-panes'), () => updateTab(activeTab.key, (x) => ({ tree: equalize(x.tree) })), 'equalize pane 分屏'),
+          cmd('close-pane', '关闭当前分屏', k('close-tab'), () => void closePane(activeTab.key, activeTab.focusedPane), 'close pane 分屏')
         )
       }
       actions.push(cmd('close-tab', `关闭标签页「${activeTab.title}」`, undefined, () => void closeTab(activeTab.key), 'close'))
@@ -640,10 +649,22 @@ export default function App() {
   const isMac = window.api.platform === 'darwin'
 
   return (
-    <div className={'app' + (isMac ? ' mac' : '')}>
+    <div className={'app' + (isMac ? ' mac' : '') + (IS_WIN ? ' win' : '')}>
       <div className="topbar">
         <div className="traffic-space" />
-        <button className="icon-btn nodrag" title="会话列表 (⌘B)" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        {IS_WIN && (
+          <button
+            className="icon-btn nodrag app-menu-btn"
+            title="菜单（文件、编辑、视图、帮助）"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect()
+              void window.api.app.popupMenu(r.left, r.bottom)
+            }}
+          >
+            <img src="./icon.png" alt="" width="18" height="18" />
+          </button>
+        )}
+        <button className="icon-btn nodrag" title={`会话列表 (${k('toggle-sidebar')})`} onClick={() => setSidebarOpen(!sidebarOpen)}>
           ☰
         </button>
         <div className="tabs nodrag">
@@ -676,15 +697,15 @@ export default function App() {
           <button className="search-pill" title="搜索服务器、标签页或任何操作" onClick={() => setPalette('all')}>
             <IconSearch size={13} />
             <span>搜索或执行命令</span>
-            <kbd>⌘⇧P</kbd>
+            <kbd>{k('palette')}</kbd>
           </button>
           <button className="icon-btn" title="新功能介绍" onClick={() => setWhatsNew(true)}>
             <IconSparkle />
           </button>
-          <button className="icon-btn" title="快捷键一览 (⌘/)" onClick={() => setShortcutsOpen(true)}>
+          <button className="icon-btn" title={`快捷键一览 (${k('shortcuts')})`} onClick={() => setShortcutsOpen(true)}>
             <IconHelp />
           </button>
-          <button className="icon-btn" title="设置 (⌘,)" onClick={() => setSettingsOpen('appearance')}>
+          <button className="icon-btn" title={`设置 (${k('settings')})`} onClick={() => setSettingsOpen('appearance')}>
             <IconGear />
           </button>
         </div>
@@ -725,13 +746,13 @@ export default function App() {
                   <IconSearch />
                   <b>搜索服务器</b>
                   <span>输入名称或 IP，回车连接</span>
-                  <kbd>⌘P</kbd>
+                  <kbd>{k('palette-sessions')}</kbd>
                 </button>
                 <button className="welcome-card" onClick={() => setPalette('all')}>
                   <IconCommand />
                   <b>命令面板</b>
                   <span>搜索并执行任何操作</span>
-                  <kbd>⌘⇧P</kbd>
+                  <kbd>{k('palette')}</kbd>
                 </button>
                 <button className="welcome-card" onClick={() => setSettingsOpen('quick')}>
                   <IconBolt />
@@ -743,7 +764,7 @@ export default function App() {
                   <IconGear />
                   <b>外观与主题</b>
                   <span>深浅色、终端配色、透明度</span>
-                  <kbd>⌘,</kbd>
+                  <kbd>{k('settings')}</kbd>
                 </button>
                 <button className="welcome-card" onClick={() => setWhatsNew(true)}>
                   <IconSparkle />
@@ -755,7 +776,7 @@ export default function App() {
                   <IconHelp />
                   <b>快捷键一览</b>
                   <span>所有快捷键</span>
-                  <kbd>⌘/</kbd>
+                  <kbd>{k('shortcuts')}</kbd>
                 </button>
               </div>
             </div>
@@ -793,24 +814,24 @@ export default function App() {
                   <span className="grow" />
                   {t.protocol === 'ssh' && t.view !== 'files' && (
                     <div className="tool-buttons">
-                      <button className="tb-btn" title="向右拆分终端 (⌘D)" onClick={() => (setActiveKey(t.key), splitFocused('row'))}>
+                      <button className="tb-btn" title={`向右拆分终端 (${k('split-right')})`} onClick={() => (setActiveKey(t.key), splitFocused('row'))}>
                         <IconSplitRight />
                         <span>向右拆分</span>
                       </button>
-                      <button className="tb-btn" title="向下拆分终端 (⌘⇧D)" onClick={() => (setActiveKey(t.key), splitFocused('col'))}>
+                      <button className="tb-btn" title={`向下拆分终端 (${k('split-down')})`} onClick={() => (setActiveKey(t.key), splitFocused('col'))}>
                         <IconSplitDown />
                         <span>向下拆分</span>
                       </button>
                       {leaves(t.tree).length > 1 && (
                         <button
                           className={'tb-btn' + (t.zoomed ? ' on' : '')}
-                          title="放大 / 还原当前分屏 (⌘⇧↩)"
+                          title={`放大 / 还原当前分屏 (${k('zoom-pane')})`}
                           onClick={() => updateTab(t.key, (x) => ({ zoomed: x.zoomed ? null : x.focusedPane }))}
                         >
                           <IconZoom />
                         </button>
                       )}
-                      <button className="tb-btn" title="在终端中查找 (⌘F)" onClick={() => emitCommand('find')}>
+                      <button className="tb-btn" title={`在终端中查找 (${k('find')})`} onClick={() => emitCommand('find')}>
                         <IconSearch />
                       </button>
                       <button
@@ -823,11 +844,11 @@ export default function App() {
                             x: r.left,
                             y: r.bottom + 4,
                             items: [
-                              { label: '清屏  ⌘L', onClick: () => emitCommand('clear') },
-                              { label: '将终端输出保存为文件…  ⌘⇧S', onClick: () => emitCommand('save-output') },
+                              { label: `清屏  ${k('clear')}`, onClick: () => emitCommand('clear') },
+                              { label: `将终端输出保存为文件…  ${k('save-output')}`, onClick: () => emitCommand('save-output') },
                               { type: 'separator' },
-                              { label: '均分所有分屏  ⌘⌃=', disabled: !multi, onClick: () => updateTab(t.key, (x) => ({ tree: equalize(x.tree) })) },
-                              { label: '关闭当前分屏  ⌘W', disabled: !multi, onClick: () => void closePane(t.key, t.focusedPane) },
+                              { label: `均分所有分屏  ${k('equalize-panes')}`, disabled: !multi, onClick: () => updateTab(t.key, (x) => ({ tree: equalize(x.tree) })) },
+                              { label: `关闭当前分屏  ${k('close-tab')}`, disabled: !multi, onClick: () => void closePane(t.key, t.focusedPane) },
                               { type: 'separator' },
                               { label: '终端设置…', onClick: () => setSettingsOpen('terminal') }
                             ]

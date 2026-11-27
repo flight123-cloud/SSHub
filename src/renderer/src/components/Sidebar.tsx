@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { k } from '../keys'
 import type { SessionInfo } from '../../../shared/types'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
@@ -79,7 +80,7 @@ export function Sidebar(props: {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
-          <button className="icon-btn" title="新建会话 (⌘N)" onClick={props.onNew}>
+          <button className="icon-btn" title={`新建会话 (${k('new-session')})`} onClick={props.onNew}>
             ＋
           </button>
         </div>

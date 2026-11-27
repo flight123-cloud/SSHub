@@ -101,23 +101,33 @@ export function isTextFile(name: string, size: number): boolean {
   return TEXT_EXT.has(ext) || /^(conf|log|txt|bak|old|orig|sample|dist|example)\.?\d*$/.test(ext)
 }
 
-/** Electron 快捷键格式 → macOS 符号，例如 "Control+Shift+`" → "⌃⇧`" */
-export function formatAccelerator(acc: string): string {
-  const map: Record<string, string> = {
-    commandorcontrol: '⌘',
-    cmdorctrl: '⌘',
-    command: '⌘',
-    cmd: '⌘',
-    control: '⌃',
-    ctrl: '⌃',
-    alt: '⌥',
-    option: '⌥',
-    shift: '⇧',
-    super: '⌘',
-    space: '空格'
-  }
-  return acc
-    .split('+')
-    .map((k) => map[k.toLowerCase()] ?? k)
-    .join('')
+/* ---------- 本地路径：同时支持 macOS / Linux（/）和 Windows（C:\、\\server\share） ---------- */
+function isWinPath(p: string): boolean {
+  return /^[a-zA-Z]:([\\/]|$)/.test(p) || p.startsWith('\\\\') || (p.includes('\\') && !p.startsWith('/'))
+}
+
+export function localJoin(dir: string, name: string): string {
+  if (!dir) return name
+  const sep = isWinPath(dir) ? '\\' : '/'
+  return /[\\/]$/.test(dir) ? dir + name : dir + sep + name
+}
+
+/** 上级目录；已经是根目录（/、C:\、\\server\share）时返回自身 */
+export function localParent(p: string): string {
+  if (!isWinPath(p)) return posixParent(p)
+  const drive = p.match(/^([a-zA-Z]:)[\\/]?$/)
+  if (drive) return drive[1] + '\\'
+  const uncRoot = p.match(/^(\\\\[^\\]+\\[^\\]+)\\?$/)
+  if (uncRoot) return uncRoot[1] + '\\'
+  const s = p.replace(/[\\/]+$/, '')
+  const i = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'))
+  if (i < 0) return p
+  const parent = s.slice(0, i)
+  if (/^[a-zA-Z]:$/.test(parent)) return parent + '\\'
+  if (/^\\\\[^\\]+$/.test(parent)) return p // \\server 不是可浏览的目录
+  return parent
+}
+
+export function localBase(p: string): string {
+  return p.split(/[\\/]/).filter(Boolean).pop() ?? p
 }

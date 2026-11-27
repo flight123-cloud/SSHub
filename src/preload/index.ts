@@ -26,7 +26,8 @@ function on<A extends unknown[]>(channel: string, cb: (...args: A) => void): () 
 }
 
 const api = {
-  platform: process.platform,
+  // SSHUB_FAKE_PLATFORM 仅用于在其他系统上测试界面（例如在 Linux 上按 Windows 方式渲染）
+  platform: (process.env.SSHUB_FAKE_PLATFORM || process.platform) as NodeJS.Platform,
 
   sessions: {
     list: () => call<SessionInfo[]>('session:list'),
@@ -89,6 +90,8 @@ const api = {
 
   app: {
     info: () => call<{ version: string; platform: string }>('app:info'),
+    popupMenu: (x: number, y: number) => call<void>('app:popupMenu', x, y),
+    titlebarColors: (bg: string, fg: string) => call<void>('app:titlebarColors', bg, fg),
     openUrl: (url: string) => call<void>('app:openUrl', url)
   },
 

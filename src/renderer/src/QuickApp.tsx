@@ -5,7 +5,10 @@ import { PromptDialog, type PromptOptions } from './components/Modal'
 import { TerminalView, type ConnStatus } from './components/TerminalView'
 import { getSettings, updateSettings, useIsDark, useSettings } from './settings'
 import { useTerminalTheme } from './themes'
-import { errMsg, formatAccelerator } from './util'
+import { errMsg } from './util'
+import { formatAccel } from '../../shared/keymap'
+import { IS_MAC } from './keys'
+import { onAppCommand } from './keybindings'
 
 startBus()
 
@@ -71,7 +74,7 @@ export default function QuickApp() {
   // 菜单快捷键：⌘W 隐藏窗口，其余转给终端
   useEffect(
     () =>
-      window.api.ui.onMenu((cmd) => {
+      onAppCommand((cmd) => {
         if (cmd === 'close-tab') void window.api.quick.hide()
         else if (cmd === 'font-bigger') updateSettings({ fontSize: Math.min(32, getSettings().fontSize + 1) })
         else if (cmd === 'font-smaller') updateSettings({ fontSize: Math.max(9, getSettings().fontSize - 1) })
@@ -112,7 +115,7 @@ export default function QuickApp() {
           </span>
         )}
         <span className="grow" />
-        <span className="muted small">{formatAccelerator(settings.quickTerminalHotkey)} 显示 / 隐藏</span>
+        <span className="muted small">{formatAccel(settings.quickTerminalHotkey, IS_MAC)} 显示 / 隐藏</span>
         <button className="icon-btn" title="隐藏" onClick={() => void window.api.quick.hide()}>
           ✕
         </button>

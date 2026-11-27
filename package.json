@@ -1,7 +1,7 @@
 {
   "name": "sshub",
   "productName": "SSHub",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "SSH 终端 + SFTP 文件传输工具",
   "main": "./out/main/index.js",
   "author": "SSHub",
@@ -12,7 +12,8 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:linux": "electron-vite build && electron-builder --linux dir"
+    "dist:linux": "electron-vite build && electron-builder --linux dir",
+    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never && electron-builder --win --arm64 --publish never"
   },
   "dependencies": {
     "basic-ftp": "^6.2.6",
@@ -135,6 +136,30 @@
       ],
       "icon": "build/icon.png",
       "category": "Development"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SSHub",
+      "uninstallDisplayName": "SSHub",
+      "installerLanguages": [
+        "en_US",
+        "zh_CN"
+      ],
+      "multiLanguageInstaller": true,
+      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
     }
   }
 }

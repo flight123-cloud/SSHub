@@ -14,6 +14,13 @@ import { markClosed, register, sendTo, get } from './connections'
 /** 每个 SSH 连接的交互式 Shell 及其字符编码 */
 const shells = new Map<string, { ch: ClientChannel; enc: Encoding }>()
 
+/** SSH Agent 地址：macOS / Linux 用 SSH_AUTH_SOCK；Windows 默认用系统 OpenSSH Agent 的命名管道 */
+function agentPath(): string | undefined {
+  if (process.env.SSH_AUTH_SOCK) return process.env.SSH_AUTH_SOCK
+  if (process.platform === 'win32') return '\\\\.\\pipe\\openssh-ssh-agent'
+  return undefined
+}
+
 /** ~/.ssh 下第一个可读的默认私钥 */
 function defaultPrivateKey(): Buffer | undefined {
   for (const f of ['id_ed25519', 'id_ecdsa', 'id_rsa']) {
@@ -101,7 +108,8 @@ async function buildConfig(
       if (password) cfg.password = password
     } else if (s.authType === 'agent') {
       // SSH Agent + ~/.ssh 下的默认私钥（与终端里直接 ssh 的行为一致）
-      if (process.env.SSH_AUTH_SOCK) cfg.agent = process.env.SSH_AUTH_SOCK
+      const agent = agentPath()
+      if (agent) cfg.agent = agent
       const key = defaultPrivateKey()
       if (key) cfg.privateKey = key
       if (!cfg.agent && !cfg.privateKey)
@@ -125,7 +133,8 @@ async function buildConfig(
     }
     // 快速连接且未填密码时，尝试系统 SSH Agent 与默认私钥
     if (!q.password) {
-      if (process.env.SSH_AUTH_SOCK) cfg.agent = process.env.SSH_AUTH_SOCK
+      const agent = agentPath()
+      if (agent) cfg.agent = agent
       const key = defaultPrivateKey()
       if (key) cfg.privateKey = key
     }

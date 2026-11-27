@@ -1,12 +1,17 @@
 import { app, nativeTheme } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import { DEFAULT_SETTINGS, type AppSettings } from '../shared/types'
+import { DEFAULT_SETTINGS, WINDOWS_FONT, type AppSettings } from '../shared/types'
 import { broadcast } from './connections'
 
 const FILE = (): string => path.join(app.getPath('userData'), 'settings.json')
 
 let cache: AppSettings | null = null
+
+/** 平台相关的默认值 */
+function defaults(): AppSettings {
+  return process.platform === 'win32' ? { ...DEFAULT_SETTINGS, fontFamily: WINDOWS_FONT } : { ...DEFAULT_SETTINGS }
+}
 const listeners: ((s: AppSettings) => void)[] = []
 
 /** 主进程内部订阅设置变化（全局快捷键、窗口效果等） */
@@ -41,9 +46,9 @@ export function applyNativeTheme(s: AppSettings = getSettings()): void {
 export function getSettings(): AppSettings {
   if (cache) return cache
   try {
-    cache = sanitize(JSON.parse(fs.readFileSync(FILE(), 'utf8')), DEFAULT_SETTINGS)
+    cache = sanitize(JSON.parse(fs.readFileSync(FILE(), 'utf8')), defaults())
   } catch {
-    cache = { ...DEFAULT_SETTINGS }
+    cache = defaults()
   }
   return cache
 }
@@ -59,7 +64,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
 }
 
 export function resetSettings(): AppSettings {
-  cache = { ...DEFAULT_SETTINGS }
+  cache = defaults()
   fs.writeFileSync(FILE(), JSON.stringify(cache, null, 2))
   applyNativeTheme(cache)
   broadcast('settings:changed', cache)

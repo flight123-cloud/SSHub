@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react'
+import { k } from '../keys'
 import { layout, type PaneNode } from '../panes'
 
 /**
@@ -83,7 +84,7 @@ export function SplitView(props: {
             onMouseDown={(e) => startDrag(e, d)}
           />
         ))}
-      {props.zoomed && multi && <div className="zoom-badge">已放大 · ⌘⇧Enter 还原</div>}
+      {props.zoomed && multi && <div className="zoom-badge">已放大 · {k('zoom-pane')} 还原</div>}
     </div>
   )
 }

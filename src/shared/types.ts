@@ -218,6 +218,9 @@ export interface AppSettings {
   showHiddenFiles: boolean
 }
 
+/** Windows 的默认等宽字体（macOS 用 DEFAULT_SETTINGS 里的 SF Mono） */
+export const WINDOWS_FONT = '"Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace'
+
 export const DEFAULT_SETTINGS: AppSettings = {
   appearance: 'system',
   terminalThemeDark: 'sshub-dark',

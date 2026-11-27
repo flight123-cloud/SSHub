@@ -20,14 +20,16 @@
   /* ---------- 最新版本的下载链接 ---------- */
   function applyRelease(rel) {
     if (!rel || !rel.assets) return
-    var pick = function (arch) {
-      // 优先 dmg，没有时用 zip
-      var dmg = rel.assets.find(function (a) { return a.name.indexOf('-' + arch + '.dmg') !== -1 })
-      var zip = rel.assets.find(function (a) { return a.name.indexOf('-' + arch + '.zip') !== -1 })
-      return dmg || zip
+    var find = function (suffix) {
+      return rel.assets.find(function (a) { return a.name.slice(-suffix.length) === suffix })
+    }
+    // macOS：优先 dmg，没有时用 zip；Windows：安装程序（-setup.exe）或免安装 zip
+    var pick = function (os, arch, kind) {
+      if (os === 'win') return kind === 'zip' ? find('-win-' + arch + '.zip') : find('-win-' + arch + '-setup.exe')
+      return find('-mac-' + arch + '.dmg') || find('-mac-' + arch + '.zip')
     }
     document.querySelectorAll('.dl-link').forEach(function (el) {
-      var asset = pick(el.getAttribute('data-arch'))
+      var asset = pick(el.getAttribute('data-os') || 'mac', el.getAttribute('data-arch'), el.getAttribute('data-kind'))
       if (asset) {
         el.href = asset.browser_download_url
         el.title = asset.name + ' (' + (asset.size / 1048576).toFixed(0) + T.mb + ')'
@@ -61,12 +63,30 @@
       })
   }
 
+  /* ---------- 按访客系统显示 macOS 或 Windows 的下载按钮 ---------- */
+  var isWindows = /Windows/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent)
+  function showOS(os) {
+    document.querySelectorAll('.cta[data-os]').forEach(function (el) {
+      el.hidden = el.getAttribute('data-os') !== os
+    })
+    document.querySelectorAll('[data-show-os]').forEach(function (a) {
+      a.hidden = a.getAttribute('data-show-os') === os
+    })
+  }
+  showOS(isWindows ? 'win' : 'mac')
+  document.querySelectorAll('[data-show-os]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault()
+      showOS(a.getAttribute('data-show-os'))
+    })
+  })
+
   /* ---------- Intel Mac：把 Intel 版按钮放到前面 ---------- */
   var uad = navigator.userAgentData
   if (uad && uad.getHighEntropyValues) {
     uad.getHighEntropyValues(['architecture']).then(function (v) {
-      if (v.architecture === 'x86') {
-        document.querySelectorAll('.cta').forEach(function (cta) {
+      if (v.architecture === 'x86' && !isWindows) {
+        document.querySelectorAll('.cta[data-os="mac"]').forEach(function (cta) {
           var x = cta.querySelector('[data-arch="x64"]')
           var a = cta.querySelector('[data-arch="arm64"]')
           if (x && a) {

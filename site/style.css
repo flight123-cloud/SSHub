@@ -778,3 +778,25 @@ details p {
     margin-left: 0;
   }
 }
+
+/* ---------- 平台切换 / 分平台安装步骤 ---------- */
+.os-switch {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  color: var(--text-3);
+}
+.os-switch [hidden] {
+  display: none;
+}
+.btn-large svg path {
+  fill: currentColor;
+}
+.steps-os {
+  max-width: 820px;
+  margin: 40px auto -26px;
+  font-size: 15px;
+  color: var(--text-2);
+}
+.steps-os:first-of-type {
+  margin-top: 36px;
+}

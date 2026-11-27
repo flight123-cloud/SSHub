@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { k, kx } from '../keys'
 import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import {
   EditorView,
@@ -256,10 +257,10 @@ export function CodeEditor(props: CodeEditorProps) {
             {name}
             <span className="muted small editor-path">{props.path}</span>
           </span>
-          <button className="icon-btn" title="查找 / 替换 (⌘F)" onClick={() => viewRef.current && openSearchPanel(viewRef.current)}>
+          <button className="icon-btn" title={`查找 / 替换 (${kx('⌘F')})`} onClick={() => viewRef.current && openSearchPanel(viewRef.current)}>
             查找
           </button>
-          <button className="icon-btn" title="跳转到行 (⌘G)" onClick={() => viewRef.current && gotoLine(viewRef.current)}>
+          <button className="icon-btn" title={`跳转到行 (${kx('⌘G')})`} onClick={() => viewRef.current && gotoLine(viewRef.current)}>
             跳转
           </button>
           <button className={'icon-btn' + (wrap ? ' on' : '')} title="自动换行" onClick={() => setWrap(!wrap)}>
@@ -300,14 +301,14 @@ export function CodeEditor(props: CodeEditorProps) {
           <label title="保存时使用的换行符">
             换行符
             <select className="mini-select" value={eol} onChange={(e) => setEol(e.target.value as 'lf' | 'crlf')}>
-              <option value="lf">LF（Linux / macOS）</option>
+              <option value="lf">LF（Linux / macOS / 服务器）</option>
               <option value="crlf">CRLF（Windows）</option>
             </select>
           </label>
           {file?.bom && <span>BOM</span>}
           {file && <span>{formatSize(file.size)}</span>}
           <span className="grow" />
-          <span className="muted">⌘S 保存 · ⌘F 查找替换 · ⌘G 跳转到行 · ⌘W 关闭</span>
+          <span className="muted">{kx('⌘S')} 保存 · {kx('⌘F')} 查找替换 · {kx('⌘G')} 跳转到行 · {k('close-tab')} 关闭</span>
         </div>
       </div>
     </div>

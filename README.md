@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-SSHub is an SSH terminal and SFTP / FTP file transfer client for macOS — manage all your servers, terminals and remote files in one app.
+SSHub is an SSH terminal and SFTP / FTP file transfer client for **macOS and Windows** — manage all your servers, terminals and remote files in one app.
 
 **Website: https://flight123-cloud.github.io/SSHub/**
 
@@ -62,7 +62,7 @@ SSHub is an SSH terminal and SFTP / FTP file transfer client for macOS — manag
   - SFTP file names are always treated as UTF-8 (a limitation of the underlying library)
 - **Terminal + files view**: terminal and file manager stacked in one tab (⌘3)
 - **Security**
-  - Passwords and passphrases are encrypted with a key from the macOS Keychain and stored only on your Mac
+  - Passwords and passphrases are encrypted with the macOS Keychain / Windows DPAPI and stored only on your computer
   - Host key fingerprints are confirmed on first connect, with a clear warning if they change (man-in-the-middle protection)
 - **Reconnect**: after a disconnect, press Enter in the terminal to reconnect
 
@@ -75,6 +75,8 @@ SSHub is an SSH terminal and SFTP / FTP file transfer client for macOS — manag
 - **Keyboard shortcuts**: ⌘/
 
 ## Download & install
+
+### macOS
 
 1. Download the installer from the [Releases](../../releases) page (or the artifacts of the latest successful build under [Actions](../../actions)):
    - **Apple silicon (M1 / M2 / M3 / M4…)**: `SSHub-x.y.z-mac-arm64.dmg`
@@ -91,35 +93,49 @@ SSHub is an SSH terminal and SFTP / FTP file transfer client for macOS — manag
      xattr -cr /Applications/SSHub.app
      ```
 
+### Windows (10 / 11)
+
+1. Download from the [Releases](../../releases) page:
+   - **Installer (recommended)**: `SSHub-x.y.z-win-x64-setup.exe` — or `-arm64-setup.exe` for ARM devices such as Surface Pro X / Copilot+ PCs
+   - **Portable**: `SSHub-x.y.z-win-x64.zip` — unzip anywhere and run `SSHub.exe`
+2. Run the installer and follow the steps (you can choose the install folder; shortcuts are added to the desktop and Start menu).
+3. **First launch**: the app is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC". Click **More info → Run anyway**. You only need to do this once.
+
+On Windows the app's own shortcuts use **Ctrl+Shift** (like Windows Terminal) so that Ctrl+C, Ctrl+D, Ctrl+W, Ctrl+Z… keep working in the terminal. Ctrl+C copies when text is selected, and Ctrl+V pastes. The app menu is behind the SSHub icon in the top-left corner.
+
 ## Keyboard shortcuts
 
-| Shortcut | Action |
-|---|---|
-| ⌘N | New session |
-| ⌘P | Search sessions / tabs |
-| ⌘⇧P | Command palette |
-| ⌘, | Settings |
-| ⌘K | Quick connect |
-| ⌘W | Close the focused pane (closes the tab when only one pane is left) |
-| ⌘⇧[ / ⌘⇧] | Previous / next tab |
-| ⌘1 / ⌘2 / ⌘3 | Terminal / files / terminal + files |
-| ⌘B | Show / hide the session list |
-| ⌘F | Find in terminal |
-| ⌘L | Clear screen |
-| ⌘D / ⌘⇧D | Split right / down |
-| ⌘⌥←→↑↓ | Move between panes |
-| ⌘⇧Enter | Zoom / restore the focused pane |
-| ⌘Z / ⌘⇧T | Undo close tab |
-| ⌘⇧S | Save terminal output to a file |
-| ⌘+ / ⌘- / ⌘0 | Bigger / smaller / reset font |
-| ⌘S | Save the file in the editor |
-| ⌘F / ⌘G | Find & replace / go to line in the editor |
+| Action | macOS | Windows |
+|---|---|---|
+| New session | ⌘N | Ctrl+Shift+N |
+| Search sessions / tabs | ⌘P | Ctrl+Shift+O |
+| Command palette | ⌘⇧P | Ctrl+Shift+P |
+| Settings | ⌘, | Ctrl+, |
+| Quick connect | ⌘K | Ctrl+Shift+K |
+| Close the focused pane (closes the tab when only one pane is left) | ⌘W | Ctrl+Shift+W |
+| Previous / next tab | ⌘⇧[ / ⌘⇧] | Ctrl+Shift+Tab / Ctrl+Tab |
+| Terminal / files / terminal + files | ⌘1 / ⌘2 / ⌘3 | Ctrl+1 / Ctrl+2 / Ctrl+3 |
+| Show / hide the session list | ⌘B | Ctrl+Shift+B |
+| Find in terminal | ⌘F | Ctrl+Shift+F |
+| Clear screen | ⌘L | Ctrl+Shift+L |
+| Copy / paste in the terminal | ⌘C / ⌘V | Ctrl+Shift+C / Ctrl+Shift+V (Ctrl+C with a selection, Ctrl+V) |
+| Split right / down | ⌘D / ⌘⇧D | Alt+Shift++ / Alt+Shift+- |
+| Move between panes | ⌘⌥←→↑↓ | Ctrl+Alt+←→↑↓ |
+| Zoom / restore the focused pane | ⌘⇧Enter | Ctrl+Shift+Enter |
+| Undo close tab | ⌘Z / ⌘⇧T | Ctrl+Shift+T |
+| Save terminal output to a file | ⌘⇧S | Ctrl+Shift+S |
+| Bigger / smaller / reset font | ⌘+ / ⌘- / ⌘0 | Ctrl+= / Ctrl+- / Ctrl+0 |
+| Keyboard shortcuts | ⌘/ | F1 |
+| Save the file in the editor | ⌘S | Ctrl+S |
+| Find & replace / go to line in the editor | ⌘F / ⌘G | Ctrl+F / Ctrl+G |
 
 ## Where your data lives
 
-- Sessions: `~/Library/Application Support/SSHub/sessions.json` (passwords are stored encrypted)
-- Trusted SSH host keys: `~/Library/Application Support/SSHub/known_hosts.json`
-- Settings: `~/Library/Application Support/SSHub/settings.json`
+The data folder is `~/Library/Application Support/SSHub/` on macOS and `%APPDATA%\SSHub\` on Windows:
+
+- `sessions.json`: sessions (passwords are encrypted with the macOS Keychain / Windows DPAPI)
+- `known_hosts.json`: trusted SSH host keys
+- `settings.json`: settings
 
 ## Development
 
@@ -130,9 +146,10 @@ npm install
 npm run dev        # run in development mode
 npm run typecheck  # type check
 npm run dist:mac   # build the macOS dmg (run on a Mac)
+npm run dist:win   # build the Windows installer and zip (run on Windows)
 ```
 
-GitHub Actions builds the dmg on macOS for every push. Publishing a release with a `v*` tag (e.g. `v0.7.0`) uploads the installers to that release automatically.
+GitHub Actions builds the macOS dmg and the Windows installers for every push. Publishing a release with a `v*` tag (e.g. `v0.7.0`) uploads the installers to that release automatically.
 
 ```
 site/         website (GitHub Pages, deployed on pushes to main)
@@ -146,6 +163,7 @@ src/
     ftpfs.ts        FTP file operations
     connections.ts  connection registry and transfer queue (shared by both protocols)
     store.ts        session storage (encrypted passwords)
+  shared/keymap.ts  keyboard shortcuts for macOS and Windows (one table for menus and UI)
   preload/    secure bridge (contextBridge)
   renderer/   UI (React)
   shared/     shared types

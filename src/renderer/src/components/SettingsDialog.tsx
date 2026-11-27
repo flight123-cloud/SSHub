@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { IS_MAC, k } from '../keys'
 import type { AppSettings } from '../../../shared/types'
 import { Modal } from './Modal'
 import { THEMES, type TermTheme } from '../themes'
 import type { SessionInfo } from '../../../shared/types'
-import { formatAccelerator } from '../util'
+import { formatAccel } from '../../../shared/keymap'
 
 export type SettingsTab = 'appearance' | 'terminal' | 'behavior' | 'quick' | 'files'
 type Tab = SettingsTab
 
-const FONT_PRESETS: [string, string][] = [
+const MAC_FONTS: [string, string][] = [
   ['SF Mono（系统默认）', '"SF Mono", Menlo, Monaco, "PingFang SC", "Courier New", monospace'],
   ['Menlo', 'Menlo, "PingFang SC", monospace'],
   ['Monaco', 'Monaco, "PingFang SC", monospace'],
@@ -17,6 +18,17 @@ const FONT_PRESETS: [string, string][] = [
   ['Source Code Pro', '"Source Code Pro", "SF Mono", Menlo, "PingFang SC", monospace'],
   ['Courier New', '"Courier New", "PingFang SC", monospace']
 ]
+
+const WIN_FONTS: [string, string][] = [
+  ['Cascadia Mono（系统默认）', '"Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace'],
+  ['Consolas', 'Consolas, "Microsoft YaHei UI", monospace'],
+  ['JetBrains Mono', '"JetBrains Mono", Consolas, "Microsoft YaHei UI", monospace'],
+  ['Fira Code', '"Fira Code", Consolas, "Microsoft YaHei UI", monospace'],
+  ['Source Code Pro', '"Source Code Pro", Consolas, "Microsoft YaHei UI", monospace'],
+  ['Courier New', '"Courier New", "Microsoft YaHei UI", monospace']
+]
+
+const FONT_PRESETS = IS_MAC ? MAC_FONTS : WIN_FONTS
 
 function Row(props: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -69,15 +81,17 @@ function HotkeyInput(props: { value: string; onChange: (v: string) => void }) {
   return (
     <input
       className={'input hotkey-input' + (recording ? ' recording' : '')}
+      data-hotkey-recorder
       readOnly
-      value={recording ? '请按下组合键…' : formatAccelerator(props.value)}
+      value={recording ? '请按下组合键…' : formatAccel(props.value, IS_MAC)}
       onFocus={() => setRecording(true)}
       onBlur={() => setRecording(false)}
       onKeyDown={(e) => {
         e.preventDefault()
         if (e.key === 'Escape') return (e.target as HTMLInputElement).blur()
         if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) return
-        const mods = [e.metaKey && 'Command', e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift'].filter(Boolean) as string[]
+        // Windows 上 metaKey 是 Win 键，Electron 里叫 Super
+        const mods = [e.metaKey && (IS_MAC ? 'Command' : 'Super'), e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift'].filter(Boolean) as string[]
         // 至少一个修饰键（F1-F12 除外），避免占用普通按键
         if (!mods.length && !/^F\d{1,2}$/.test(e.key)) return
         const codeKey = e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : null
@@ -152,7 +166,7 @@ export function SettingsDialog(props: {
 
       {tab === 'appearance' && (
         <div className="set-list">
-          <Row label="界面外观" hint="跟随系统时，macOS 切换深色 / 浅色模式后自动切换">
+          <Row label="界面外观" hint="跟随系统时，系统切换深色 / 浅色模式后自动切换">
             <div className="segmented">
               {(
                 [
@@ -180,7 +194,7 @@ export function SettingsDialog(props: {
               <span className="set-value">{Math.round(s.backgroundOpacity * 100)}%</span>
             </div>
           </Row>
-          <Row label="毛玻璃背景" hint="macOS 原生的模糊效果，和「不透明度」配合使用（不透明度为 100% 时看不出效果）">
+          <Row label="毛玻璃背景" hint={`${IS_MAC ? 'macOS 原生' : 'Windows 11 亚克力'}模糊效果，和「不透明度」配合使用（不透明度为 100% 时看不出效果）`}>
             <Toggle checked={s.backgroundBlur} onChange={(v) => set({ backgroundBlur: v })} />
           </Row>
           <div className="theme-section">
@@ -240,7 +254,7 @@ export function SettingsDialog(props: {
               />
             </Row>
           ) : null}
-          <Row label="字号" hint="也可以用 ⌘+ / ⌘- 调整">
+          <Row label="字号" hint={`也可以用 ${k('font-bigger')} / ${k('font-smaller')} 调整`}>
             <div className="row">
               <input
                 type="range"
@@ -324,9 +338,11 @@ export function SettingsDialog(props: {
           <Row label="允许服务器写入剪贴板" hint="服务器上的 vim、tmux 等程序复制的内容会同步到 Mac 剪贴板（OSC 52）。服务器读取剪贴板始终被禁止">
             <Toggle checked={s.osc52Write} onChange={(v) => set({ osc52Write: v })} />
           </Row>
+          {IS_MAC && (
           <Row label="Option 键作为 Alt" hint="开启后 Option+B / Option+F 等可以在 bash、emacs 中按词移动，但无法再用 Option 输入特殊符号">
             <Toggle checked={s.optionAsAlt} onChange={(v) => set({ optionAsAlt: v })} />
           </Row>
+          )}
           <Row label="终端中右键">
             <div className="segmented">
               <button className={s.rightClick === 'menu' ? 'active' : ''} onClick={() => set({ rightClick: 'menu' })}>
@@ -343,7 +359,7 @@ export function SettingsDialog(props: {
           <Row label="未聚焦的分屏变暗" hint="分屏时更容易看出当前正在输入的是哪个面板">
             <Toggle checked={s.dimUnfocusedSplits} onChange={(v) => set({ dimUnfocusedSplits: v })} />
           </Row>
-          <Row label="长命令完成通知" hint="命令运行超过指定时间后结束，发送 macOS 通知。通过识别命令提示符判断命令结束，也支持服务器发送的 OSC 133 / OSC 9 / OSC 777 通知序列">
+          <Row label="长命令完成通知" hint="命令运行超过指定时间后结束，发送系统通知。通过识别命令提示符判断命令结束，也支持服务器发送的 OSC 133 / OSC 9 / OSC 777 通知序列">
             <select
               className="input"
               value={s.notifyOnCommandFinish}
@@ -419,7 +435,7 @@ export function SettingsDialog(props: {
 
       {tab === 'files' && (
         <div className="set-list">
-          <Row label="撤销关闭标签页" hint="关闭标签页后，在这段时间内按 ⌘Z 或 ⌘⇧T 可以恢复，连接保持不断开">
+          <Row label="撤销关闭标签页" hint={`关闭标签页后，在这段时间内按 ${IS_MAC ? '⌘Z 或 ' : ''}${k('reopen-tab')} 可以恢复，连接保持不断开`}>
             <select className="input" value={String(s.undoCloseSeconds)} onChange={(e) => set({ undoCloseSeconds: Number(e.target.value) })}>
               <option value="0">关闭</option>
               <option value="5">5 秒内</option>

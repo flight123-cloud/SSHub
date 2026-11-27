@@ -14,6 +14,7 @@ import { bindConnection, onCommand } from '../bus'
 import { errMsg } from '../util'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { Modal } from './Modal'
+import { IS_MAC } from '../keys'
 
 export type ConnStatus = 'connecting' | 'connected' | 'closed' | 'error'
 
@@ -252,6 +253,21 @@ export function TerminalView(props: TerminalViewProps) {
       })
     )
     term.unicode.activeVersion = '11'
+    // Windows / Linux：有选中文字时 Ctrl+C 复制（否则照常发送中断），Ctrl+V 粘贴
+    if (!IS_MAC) {
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type !== 'keydown' || !e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return true
+        if (e.code === 'KeyC' && term.hasSelection()) {
+          void window.api.ui.copyText(term.getSelection())
+          term.clearSelection()
+          e.preventDefault()
+          return false
+        }
+        // 交给浏览器触发原生粘贴事件，走下面的粘贴保护
+        if (e.code === 'KeyV') return false
+        return true
+      })
+    }
     termRef.current = term
     fitRef.current = fit
     searchRef.current = search
@@ -420,6 +436,11 @@ export function TerminalView(props: TerminalViewProps) {
         if (cmd === 'clear') termRef.current?.clear()
         if (cmd === 'find') setFindOpen(true)
         if (cmd === 'save-output') void saveOutput()
+        if (cmd === 'term-copy') {
+          const text = termRef.current?.getSelection()
+          if (text) void window.api.ui.copyText(text)
+        }
+        if (cmd === 'term-paste') pasteFromClipboard()
       }),
     []
   )

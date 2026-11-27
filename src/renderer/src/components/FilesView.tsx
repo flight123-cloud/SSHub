@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { FILE_MANAGER, TRASH } from '../keys'
 import type { FileEntry, TransferItem } from '../../../shared/types'
 import { onTransfer } from '../bus'
-import { errMsg, isTextFile, posixJoin, posixParent } from '../util'
+import { errMsg, isTextFile, localBase, localJoin, localParent, posixJoin, posixParent } from '../util'
 import { getSettings, useSettings } from '../settings'
 import type { MenuItem } from './ContextMenu'
 import { FilePane, type Side } from './FilePane'
@@ -86,7 +87,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
         if (t.status === 'done') {
           if (t.direction === 'upload') {
             if (posixParent(t.dest) === remoteRef.current.cwd) void loadRemote(remoteRef.current.cwd)
-          } else if (posixParent(t.dest) === localRef.current.cwd) void loadLocal(localRef.current.cwd)
+          } else if (localParent(t.dest) === localRef.current.cwd) void loadLocal(localRef.current.cwd)
         }
         if (t.status === 'error') notify(`${t.name} 传输失败：${t.error}`, true)
       }),
@@ -267,7 +268,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '新建文件夹', label: '名称', defaultValue: '新建文件夹' })
     if (!name) return
     try {
-      await window.api.local.mkdir(posixJoin(local.cwd, name))
+      await window.api.local.mkdir(localJoin(local.cwd, name))
       void loadLocal(local.cwd)
     } catch (e) {
       notify(errMsg(e), true)
@@ -277,7 +278,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '新建文件', label: '文件名', defaultValue: 'untitled.txt' })
     if (!name) return
     try {
-      await window.api.local.createFile(posixJoin(local.cwd, name))
+      await window.api.local.createFile(localJoin(local.cwd, name))
       void loadLocal(local.cwd)
     } catch (e) {
       notify(/EEXIST/.test(errMsg(e)) ? `「${name}」已存在` : errMsg(e), true)
@@ -285,8 +286,8 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   }
   const localMove = async (paths: string[], targetDir: string): Promise<void> => {
     for (const p of paths) {
-      const dest = posixJoin(targetDir, p.split('/').pop()!)
-      if (dest === p || targetDir === p || targetDir.startsWith(p + '/')) continue
+      const dest = localJoin(targetDir, localBase(p))
+      if (dest === p || targetDir === p || targetDir.startsWith(p + '/') || targetDir.startsWith(p + '\\')) continue
       try {
         await window.api.local.rename(p, dest)
       } catch (e) {
@@ -299,7 +300,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
     const name = await ask({ title: '重命名', label: '新名称', defaultValue: f.name })
     if (!name || name === f.name) return
     try {
-      await window.api.local.rename(f.path, posixJoin(posixParent(f.path), name))
+      await window.api.local.rename(f.path, localJoin(localParent(f.path), name))
       void loadLocal(local.cwd)
     } catch (e) {
       notify(errMsg(e), true)
@@ -307,7 +308,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
   }
   const localTrash = async (list: FileEntry[]): Promise<void> => {
     if (!list.length) return
-    const ok = await window.api.ui.confirm(`将选中的 ${list.length} 项移到废纸篓？`)
+    const ok = await window.api.ui.confirm(`将选中的 ${list.length} 项移到${TRASH}？`)
     if (!ok) return
     try {
       await window.api.local.trash(list.map((f) => f.path))
@@ -325,14 +326,14 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
       if (one?.isDir) items.push({ label: '打开', onClick: () => void loadLocal(one.path) })
       items.push({ type: 'separator' })
       if (one) items.push({ label: '重命名…', onClick: () => void localRename(one) })
-      if (one) items.push({ label: '在 Finder 中显示', onClick: () => void window.api.local.reveal(one.path) })
+      if (one) items.push({ label: `在${FILE_MANAGER}中显示`, onClick: () => void window.api.local.reveal(one.path) })
       items.push({ label: '复制路径', onClick: () => void window.api.ui.copyText(sel.map((s) => s.path).join('\n')) })
-      items.push({ label: '移到废纸篓', danger: true, onClick: () => void localTrash(sel) })
+      items.push({ label: `移到${TRASH}`, danger: true, onClick: () => void localTrash(sel) })
       items.push({ type: 'separator' })
     }
     items.push({ label: '新建文件…', onClick: () => void localNewFile() })
     items.push({ label: '新建文件夹…', onClick: () => void localMkdir() })
-    items.push({ label: '在 Finder 中打开当前目录', onClick: () => void window.api.local.open(local.cwd) })
+    items.push({ label: `在${FILE_MANAGER}中打开当前目录`, onClick: () => void window.api.local.open(local.cwd) })
     items.push({ label: '刷新', onClick: () => void loadLocal(local.cwd) })
     return items
   }
@@ -358,7 +359,7 @@ export function FilesView(props: { connId: string; homeDir: string; active: bool
           showHidden={showHidden}
           onToggleHidden={() => setShowHidden(!showHidden)}
           onNavigate={(p) => void loadLocal(p.replace(/^~(?=$|\/)/, localHome))}
-          onUp={() => void loadLocal(posixParent(local.cwd))}
+          onUp={() => void loadLocal(localParent(local.cwd))}
           onHome={() => void loadLocal(localHome)}
           onRefresh={() => void loadLocal(local.cwd)}
           onOpen={(f) => (f.isDir ? void loadLocal(f.path) : void upload([f.path]))}

@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，相当于把 Xshell 和 Xftp 合在一个应用里。
+SSHub 是一款 **macOS 和 Windows** 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，相当于把 Xshell 和 Xftp 合在一个应用里。
 
 **官网：https://flight123-cloud.github.io/SSHub/zh/**
 
@@ -60,7 +60,7 @@ SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，
   - SFTP 文件名始终按 UTF-8 处理（底层库的限制）
 - **终端+文件模式**：终端和文件管理上下同时显示（⌘3）
 - **安全**
-  - 密码和口令用 macOS 钥匙串加密后保存在本机
+  - 密码和口令用 macOS 钥匙串 / Windows DPAPI 加密后保存在本机
   - 首次连接会确认服务器指纹，指纹变化时会发出警告（防止中间人攻击）
 - **断线重连**：连接断开后，在终端里按 Enter 就能重新连接
 
@@ -73,6 +73,8 @@ SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，
 - **快捷键一览**：⌘/
 
 ## 下载安装
+
+### macOS
 
 1. 打开本仓库的 [Releases](../../releases) 页面（或 [Actions](../../actions) 里最新一次成功构建的 Artifacts），下载安装包：
    - **Apple 芯片（M1/M2/M3/M4…）**：`SSHub-x.y.z-mac-arm64.dmg`
@@ -89,35 +91,49 @@ SSHub 是一款 macOS 上的 SSH 远程连接 + SFTP / FTP 文件传输工具，
      xattr -cr /Applications/SSHub.app
      ```
 
+### Windows（10 / 11）
+
+1. 在 [Releases](../../releases) 页面下载：
+   - **安装版（推荐）**：`SSHub-x.y.z-win-x64-setup.exe`；ARM 设备（如 Surface Pro X、Copilot+ PC）用 `-arm64-setup.exe`
+   - **免安装版**：`SSHub-x.y.z-win-x64.zip`，解压到任意位置运行 `SSHub.exe`
+2. 运行安装程序，按提示安装（可以选择安装位置，会在桌面和开始菜单创建快捷方式）。
+3. **第一次运行**：应用还没有代码签名，Windows 可能提示「Windows 已保护你的电脑」。点 **更多信息 → 仍要运行** 即可，只需要一次。
+
+Windows 上应用自己的快捷键使用 **Ctrl+Shift**（和 Windows Terminal 一样），这样 Ctrl+C、Ctrl+D、Ctrl+W、Ctrl+Z 等在终端里照常可用；有选中文字时 Ctrl+C 是复制，Ctrl+V 粘贴。应用菜单在左上角的 SSHub 图标里。
+
 ## 快捷键
 
-| 快捷键 | 功能 |
-|---|---|
-| ⌘N | 新建会话 |
-| ⌘P | 搜索会话 / 标签页 |
-| ⌘⇧P | 命令面板 |
-| ⌘, | 设置 |
-| ⌘K | 快速连接 |
-| ⌘W | 关闭当前分屏（只有一个时关闭标签页） |
-| ⌘⇧[ / ⌘⇧] | 切换上一个 / 下一个标签 |
-| ⌘1 / ⌘2 / ⌘3 | 切换到 终端 / 文件传输 / 终端+文件 |
-| ⌘B | 显示 / 隐藏会话列表 |
-| ⌘F | 在终端中查找 |
-| ⌘L | 清屏 |
-| ⌘D / ⌘⇧D | 向右 / 向下拆分终端 |
-| ⌘⌥←→↑↓ | 在分屏间切换 |
-| ⌘⇧Enter | 放大 / 还原当前分屏 |
-| ⌘Z / ⌘⇧T | 撤销关闭标签页 |
-| ⌘⇧S | 将终端输出保存为文件 |
-| ⌘+ / ⌘- / ⌘0 | 放大 / 缩小 / 重置字体 |
-| ⌘S | 在线编辑文件时保存 |
-| ⌘F / ⌘G | 编辑器里查找替换 / 跳转到行 |
+| 功能 | macOS | Windows |
+|---|---|---|
+| 新建会话 | ⌘N | Ctrl+Shift+N |
+| 搜索会话 / 标签页 | ⌘P | Ctrl+Shift+O |
+| 命令面板 | ⌘⇧P | Ctrl+Shift+P |
+| 设置 | ⌘, | Ctrl+, |
+| 快速连接 | ⌘K | Ctrl+Shift+K |
+| 关闭当前分屏（只有一个时关闭标签页） | ⌘W | Ctrl+Shift+W |
+| 上一个 / 下一个标签页 | ⌘⇧[ / ⌘⇧] | Ctrl+Shift+Tab / Ctrl+Tab |
+| 终端 / 文件传输 / 终端+文件 | ⌘1 / ⌘2 / ⌘3 | Ctrl+1 / Ctrl+2 / Ctrl+3 |
+| 显示 / 隐藏会话列表 | ⌘B | Ctrl+Shift+B |
+| 在终端中查找 | ⌘F | Ctrl+Shift+F |
+| 清屏 | ⌘L | Ctrl+Shift+L |
+| 终端复制 / 粘贴 | ⌘C / ⌘V | Ctrl+Shift+C / Ctrl+Shift+V（有选中时 Ctrl+C、Ctrl+V） |
+| 向右 / 向下拆分终端 | ⌘D / ⌘⇧D | Alt+Shift++ / Alt+Shift+- |
+| 在分屏间切换 | ⌘⌥←→↑↓ | Ctrl+Alt+←→↑↓ |
+| 放大 / 还原当前分屏 | ⌘⇧Enter | Ctrl+Shift+Enter |
+| 撤销关闭标签页 | ⌘Z / ⌘⇧T | Ctrl+Shift+T |
+| 将终端输出保存为文件 | ⌘⇧S | Ctrl+Shift+S |
+| 放大 / 缩小 / 重置字体 | ⌘+ / ⌘- / ⌘0 | Ctrl+= / Ctrl+- / Ctrl+0 |
+| 快捷键一览 | ⌘/ | F1 |
+| 在线编辑文件时保存 | ⌘S | Ctrl+S |
+| 编辑器里查找替换 / 跳转到行 | ⌘F / ⌘G | Ctrl+F / Ctrl+G |
 
 ## 数据存放位置
 
-- 会话：`~/Library/Application Support/SSHub/sessions.json`（密码是加密后保存的）
-- 已信任的 SSH 主机指纹：`~/Library/Application Support/SSHub/known_hosts.json`
-- 设置：`~/Library/Application Support/SSHub/settings.json`
+数据目录：macOS 是 `~/Library/Application Support/SSHub/`，Windows 是 `%APPDATA%\SSHub\`：
+
+- `sessions.json`：会话（密码用 macOS 钥匙串 / Windows DPAPI 加密后保存）
+- `known_hosts.json`：已信任的 SSH 主机指纹
+- `settings.json`：设置
 
 ## 开发
 
@@ -128,9 +144,10 @@ npm install
 npm run dev        # 开发模式运行
 npm run typecheck  # 类型检查
 npm run dist:mac   # 打包 macOS dmg（需要在 Mac 上执行）
+npm run dist:win   # 打包 Windows 安装程序和 zip（需要在 Windows 上执行）
 ```
 
-每次推送代码后，GitHub Actions 会自动在 macOS 上构建 dmg。推送 `v*` 格式的标签（例如 `v0.1.0`）时，还会自动发布 Release。
+每次推送代码后，GitHub Actions 会自动构建 macOS 的 dmg 和 Windows 的安装程序。推送 `v*` 格式的标签（例如 `v0.1.0`）时，还会自动发布 Release。
 
 ```
 site/         官网（GitHub Pages，推送到 main 后自动部署）
@@ -144,6 +161,7 @@ src/
     ftpfs.ts        FTP 文件操作
     connections.ts  连接管理与传输队列（两种协议共用）
     store.ts        会话存储（密码加密）
+  shared/keymap.ts  macOS / Windows 两套快捷键（菜单和界面共用一张表）
   preload/    安全桥接（contextBridge）
   renderer/   界面（React）
   shared/     共享类型
