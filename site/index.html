@@ -1,68 +1,80 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SSHub — Mac 上的 SSH 终端与文件传输工具</title>
+    <title>SSHub — SSH terminal &amp; file transfer for Mac</title>
+    <script>
+      // 用户之前选过中文：直接进入中文版（?lang=en 可强制英文）
+      try {
+        if (localStorage.getItem('sshub-lang') === 'zh' && location.search.indexOf('lang=en') === -1) location.replace('zh/')
+      } catch (e) {}
+    </script>
     <meta
       name="description"
-      content="SSHub 是一款 macOS 上的 SSH 终端 + SFTP / FTP 文件传输工具：会话管理、终端分屏、双栏文件传输、在线编辑服务器文件、命令面板、Quick Terminal。免费开源。"
+      content="SSHub is an SSH terminal and SFTP / FTP client for macOS: saved sessions, split terminals, dual-pane file transfer, in-place editing of server files, a command palette and a drop-down Quick Terminal. Free and open source."
     />
     <meta name="theme-color" content="#0e0f13" />
     <link rel="icon" href="assets/favicon.png" />
     <link rel="apple-touch-icon" href="assets/icon.png" />
+    <link rel="canonical" href="https://flight123-cloud.github.io/SSHub/" />
+    <link rel="alternate" hreflang="en" href="https://flight123-cloud.github.io/SSHub/" />
+    <link rel="alternate" hreflang="zh-CN" href="https://flight123-cloud.github.io/SSHub/zh/" />
+    <link rel="alternate" hreflang="x-default" href="https://flight123-cloud.github.io/SSHub/" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="SSHub — Mac 上的 SSH 终端与文件传输工具" />
-    <meta property="og:description" content="会话管理、终端分屏、SFTP / FTP 双栏传输、在线编辑服务器文件。免费开源。" />
-    <meta property="og:image" content="assets/og.jpg" />
+    <meta property="og:title" content="SSHub — SSH terminal & file transfer for Mac" />
+    <meta property="og:description" content="Saved sessions, split terminals, SFTP / FTP dual-pane transfer and in-place editing of server files. Free and open source." />
+    <meta property="og:image" content="https://flight123-cloud.github.io/SSHub/assets/og.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="nav">
       <div class="container nav-inner">
-        <a class="brand" href="#top" aria-label="SSHub 首页">
+        <a class="brand" href="#top" aria-label="SSHub home">
           <img src="assets/icon.png" alt="" width="28" height="28" />
           <span>SSHub</span>
         </a>
-        <nav class="nav-links" aria-label="页面导航">
-          <a href="#features">功能</a>
-          <a href="#security">安全</a>
-          <a href="#install">安装</a>
-          <a href="#faq">常见问题</a>
+        <nav class="nav-links" aria-label="Page sections">
+          <a href="#features">Features</a>
+          <a href="#security">Security</a>
+          <a href="#install">Install</a>
+          <a href="#faq">FAQ</a>
           <a href="https://github.com/flight123-cloud/SSHub" rel="noopener">GitHub</a>
         </nav>
-        <a class="btn btn-small btn-primary" href="#download">下载</a>
+        <a class="lang-switch" href="zh/" hreflang="zh-CN" lang="zh-CN" data-lang="zh" title="切换到中文">中文</a>
+        <a class="btn btn-small btn-primary" href="#download">Download</a>
       </div>
     </header>
 
     <main id="top">
-      <!-- 首屏 -->
+      <!-- Hero -->
       <section class="hero">
         <div class="container hero-inner">
-          <p class="eyebrow"><span class="dot"></span> 免费 · 开源 · 专为 macOS 打造</p>
-          <h1>在 Mac 上，<br class="br-sm" />管好你的每一台服务器</h1>
+          <p class="eyebrow"><span class="dot"></span> Free · Open source · Built for macOS</p>
+          <h1>Every server you manage,<br />right on your Mac</h1>
           <p class="lead">
-            SSH 终端和 SFTP / FTP 文件传输合在一个应用里。保存服务器、双击连接、分屏同时操作、拖拽传文件、直接在线改配置——日常运维需要的都在这里。
+            An SSH terminal and SFTP / FTP file transfer in one app. Save your servers, connect with a double-click, work in split panes, drag files across and
+            edit configs in place — everything day-to-day ops needs.
           </p>
           <div class="cta" id="download">
             <a class="btn btn-primary btn-large dl-link" data-arch="arm64" href="https://github.com/flight123-cloud/SSHub/releases/latest">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.7c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-.9-2.4-3.9zM14 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>
               <span>
-                <b>下载 macOS 版</b>
-                <small>Apple 芯片（M1 / M2 / M3 / M4）</small>
+                <b>Download for macOS</b>
+                <small>Apple silicon (M1 / M2 / M3 / M4)</small>
               </span>
             </a>
             <a class="btn btn-ghost btn-large dl-link" data-arch="x64" href="https://github.com/flight123-cloud/SSHub/releases/latest">
               <span>
-                <b>Intel 芯片版</b>
-                <small>2020 年以前的 Mac</small>
+                <b>Intel version</b>
+                <small>Macs from before 2020</small>
               </span>
             </a>
           </div>
           <p class="meta">
-            <span id="version">最新版本</span> · 需要 macOS 12 或更高版本 · <a href="#install">安装说明</a> ·
-            <a href="https://github.com/flight123-cloud/SSHub/releases" rel="noopener">所有版本</a>
+            <span id="version">Latest version</span> · Requires macOS 12 or later · <a href="#install">Install guide</a> ·
+            <a href="https://github.com/flight123-cloud/SSHub/releases" rel="noopener">All releases</a>
           </p>
         </div>
         <div class="container">
@@ -73,150 +85,151 @@
                 src="assets/hero-splits.webp"
                 width="2400"
                 height="1500"
-                alt="SSHub 主界面：左侧是按分组保存的服务器，右侧一个标签页里分成三个终端，分别显示项目文件、访问日志和服务状态"
+                alt="SSHub main window: grouped saved servers on the left, and one tab split into three terminals showing project files, an access log and service status"
                 fetchpriority="high"
               />
             </div>
           </figure>
+          <p class="ui-note">The app's interface is currently in Simplified Chinese.</p>
         </div>
       </section>
 
-      <!-- 功能速览 -->
+      <!-- Features overview -->
       <section class="section" id="features">
         <div class="container">
-          <h2 class="section-title">你每天要做的事，都更顺手了</h2>
-          <p class="section-lead">不用在好几个工具之间来回切换，也不用记一堆命令。</p>
+          <h2 class="section-title">Everything you do every day, made smoother</h2>
+          <p class="section-lead">No more juggling separate tools or memorizing commands.</p>
           <div class="grid-6">
             <div class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16M12 12h9" /></svg>
               </div>
-              <h3>多标签 + 终端分屏</h3>
-              <p>一个窗口里开多台服务器，每个标签页还能左右、上下拆分，一边看日志一边操作。</p>
+              <h3>Tabs + split terminals</h3>
+              <p>Open many servers in one window, then split any tab left/right or top/bottom — watch logs in one pane while you work in another.</p>
             </div>
             <div class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="8" height="14" rx="1.5" /><rect x="13.5" y="5" width="8" height="14" rx="1.5" /><path d="M9 12h6m-2-2 2 2-2 2" /></svg>
               </div>
-              <h3>双栏文件传输</h3>
-              <p>左边本地、右边服务器，拖一下就上传下载，整个文件夹也行，进度清清楚楚。</p>
+              <h3>Dual-pane file transfer</h3>
+              <p>Local on the left, server on the right. Drag to upload or download — whole folders too — with clear progress.</p>
             </div>
             <div class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M8 14l2 2-2 2M12 18h4" /></svg>
               </div>
-              <h3>在线编辑服务器文件</h3>
-              <p>双击配置文件直接改，⌘S 保存回服务器。语法高亮、查找替换，GBK 文件也不乱码。</p>
+              <h3>Edit server files in place</h3>
+              <p>Double-click a config to edit it and press ⌘S to save it back. Syntax highlighting, find &amp; replace, and GBK files that don't turn into gibberish.</p>
             </div>
             <div class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
               </div>
-              <h3>命令面板</h3>
-              <p>⌘P 输入几个字母就连上服务器，⌘⇧P 搜索执行任何操作，不用翻菜单。</p>
+              <h3>Command palette</h3>
+              <p>⌘P and a few letters connect you to a server; ⌘⇧P finds and runs any action. No menu digging.</p>
             </div>
             <div class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><path d="M13 2 4.5 13H11l-1 9 8.5-11H12z" /></svg>
               </div>
               <h3>Quick Terminal</h3>
-              <p>在任何应用里按一个快捷键，终端从屏幕顶部滑下来；再按一下收起，连接一直在。</p>
+              <p>Press a hotkey in any app and a terminal slides down from the top of the screen. Press again to hide it — the connection stays open.</p>
             </div>
             <div class="card">
               <div class="card-icon">
                 <svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.9 7.5-9.5V6z" /><path d="m9 12 2 2 4-4" /></svg>
               </div>
-              <h3>为生产环境设计</h3>
-              <p>粘贴多行先确认、首次连接校验服务器指纹、密码存进 macOS 钥匙串。</p>
+              <h3>Made for production</h3>
+              <p>Multi-line paste confirmation, host key verification on first connect, and passwords kept in the macOS Keychain.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 细节：分屏 -->
+      <!-- Splits -->
       <section class="section feature">
         <div class="container feature-inner">
           <div class="feature-text">
-            <span class="kicker">会话管理 · 多标签 · 分屏</span>
-            <h2>一个窗口，盯住所有服务器</h2>
+            <span class="kicker">Sessions · Tabs · Splits</span>
+            <h2>One window to keep an eye on every server</h2>
             <ul class="checks">
-              <li>服务器按分组保存在左侧，<b>双击</b>、点「连接」或按 <kbd>Enter</kbd> 就能连上</li>
-              <li><kbd>⌘D</kbd> 向右拆分、<kbd>⌘⇧D</kbd> 向下拆分，每个分屏都是独立连接</li>
-              <li>未聚焦的分屏自动变暗；<kbd>⌘⇧↩</kbd> 放大当前分屏，再按一次还原</li>
-              <li>误关了标签页？10 秒内按 <kbd>⌘Z</kbd> 恢复，连接没断</li>
-              <li>后台的长命令跑完了，弹出系统通知提醒你</li>
+              <li>Servers are saved in groups in the sidebar — <b>double-click</b>, click "Connect" or press <kbd>Enter</kbd> to connect</li>
+              <li><kbd>⌘D</kbd> splits right, <kbd>⌘⇧D</kbd> splits down; every pane is its own connection</li>
+              <li>Unfocused panes are dimmed; <kbd>⌘⇧↩</kbd> zooms the current pane and restores it again</li>
+              <li>Closed a tab by mistake? Press <kbd>⌘Z</kbd> within 10 seconds — the connection never dropped</li>
+              <li>Get a macOS notification when a long-running command finishes in the background</li>
             </ul>
           </div>
           <figure class="shot">
             <div class="window">
               <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <img src="assets/dark-tokyo.webp" width="2400" height="1500" loading="lazy" alt="Tokyo Night 配色下的三分屏终端" />
+              <img src="assets/dark-tokyo.webp" width="2400" height="1500" loading="lazy" alt="Three split terminals with the Tokyo Night color scheme" />
             </div>
           </figure>
         </div>
       </section>
 
-      <!-- 细节：文件传输 -->
+      <!-- File transfer -->
       <section class="section feature reverse">
         <div class="container feature-inner">
           <div class="feature-text">
             <span class="kicker">SFTP · FTP · FTPS</span>
-            <h2>传文件，像在 Finder 里一样简单</h2>
+            <h2>Moving files feels as easy as Finder</h2>
             <ul class="checks">
-              <li>本地和服务器左右并排，<b>拖拽</b>、双击或点箭头即可传输，也能直接从 Finder 拖进来</li>
-              <li>整个文件夹一起上传下载，显示进度和速度，随时可以取消</li>
-              <li>服务器上新建、重命名、复制、移动、删除、改权限，右键都有</li>
-              <li>同时支持 SFTP、FTP、显式 / 隐式 FTPS，以及匿名登录</li>
-              <li>老服务器的 <b>GBK 中文文件名</b>，选个编码就能正常显示</li>
+              <li>Local and remote side by side — <b>drag</b>, double-click or use the arrows, or drop files straight from Finder</li>
+              <li>Upload and download whole folders with progress and speed; cancel any time</li>
+              <li>Create, rename, duplicate, move, delete and chmod on the server from the context menu</li>
+              <li>SFTP, FTP, explicit / implicit FTPS and anonymous login are all supported</li>
+              <li>Legacy servers with <b>GBK (Chinese) file names</b>? Pick the encoding and they display correctly</li>
             </ul>
           </div>
           <figure class="shot">
             <div class="window">
               <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <img src="assets/files.webp" width="2400" height="1500" loading="lazy" alt="双栏文件传输：左侧本地项目目录，右侧服务器目录，下方传输队列显示已完成的上传" />
+              <img src="assets/files.webp" width="2400" height="1500" loading="lazy" alt="Dual-pane file transfer: a local project folder on the left, the server folder on the right, and a transfer queue with finished uploads below" />
             </div>
           </figure>
         </div>
       </section>
 
-      <!-- 细节：在线编辑 -->
+      <!-- Editor -->
       <section class="section feature">
         <div class="container feature-inner">
           <div class="feature-text">
-            <span class="kicker">在线编辑</span>
-            <h2>改个配置，不用再下载、编辑、上传</h2>
+            <span class="kicker">In-place editing</span>
+            <h2>Change a config without the download–edit–upload dance</h2>
             <ul class="checks">
-              <li>双击 nginx.conf、.env、脚本、日志等文本文件，直接在内置编辑器打开</li>
-              <li>上百种语言和配置格式的语法高亮，<kbd>⌘F</kbd> 查找替换，<kbd>⌘G</kbd> 跳转到行</li>
-              <li>自动识别 UTF-8 / GBK / Big5，保存时保持原编码、原换行符</li>
-              <li>想用 VS Code？右键「用本地应用打开」，保存后<b>自动上传</b>回服务器</li>
+              <li>Double-click nginx.conf, .env, scripts or logs to open them in the built-in editor</li>
+              <li>Syntax highlighting for 100+ languages and config formats, <kbd>⌘F</kbd> find &amp; replace, <kbd>⌘G</kbd> go to line</li>
+              <li>Detects UTF-8 / GBK / Big5 and keeps the original encoding and line endings when saving</li>
+              <li>Prefer VS Code? Right-click → "Open with local app" and every save is <b>uploaded automatically</b></li>
             </ul>
           </div>
           <figure class="shot">
             <div class="window">
               <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <img src="assets/editor.webp" width="2400" height="1500" loading="lazy" alt="内置编辑器打开服务器上的 nginx.conf，带语法高亮和行号" />
+              <img src="assets/editor.webp" width="2400" height="1500" loading="lazy" alt="The built-in editor showing nginx.conf from the server with syntax highlighting and line numbers" />
             </div>
           </figure>
         </div>
       </section>
 
-      <!-- 细节：命令面板 -->
+      <!-- Command palette -->
       <section class="section feature reverse">
         <div class="container feature-inner">
           <div class="feature-text">
-            <span class="kicker">命令面板</span>
-            <h2>记不住快捷键？搜一下就行</h2>
+            <span class="kicker">Command palette</span>
+            <h2>Can't remember a shortcut? Just search</h2>
             <ul class="checks">
-              <li><kbd>⌘P</kbd> 输入服务器名称或 IP，回车直接连接，已打开的标签页也能搜到</li>
-              <li><kbd>⌘⇧P</kbd> 搜索并执行任何操作：拆分终端、切换主题、开关设置……</li>
-              <li>模糊匹配：输入 <code>pdb</code> 就能找到 <code>prod-db</code></li>
+              <li><kbd>⌘P</kbd>: type a server name or IP and press Enter to connect — open tabs show up too</li>
+              <li><kbd>⌘⇧P</kbd>: find and run any action — split the terminal, switch themes, toggle settings…</li>
+              <li>Fuzzy matching: <code>pdb</code> finds <code>prod-db</code></li>
             </ul>
           </div>
           <figure class="shot">
             <div class="window">
               <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <img src="assets/palette-sessions.webp" width="2400" height="1500" loading="lazy" alt="命令面板中输入 prod，列出匹配的服务器和标签页" />
+              <img src="assets/palette-sessions.webp" width="2400" height="1500" loading="lazy" alt="The command palette listing servers and tabs that match prod" />
             </div>
           </figure>
         </div>
@@ -226,124 +239,126 @@
       <section class="section">
         <div class="container center">
           <span class="kicker">Quick Terminal</span>
-          <h2 class="section-title">按一下快捷键，终端从天而降</h2>
+          <h2 class="section-title">One hotkey, and a terminal drops down</h2>
           <p class="section-lead">
-            正在写文档、看监控，想上服务器敲两条命令？按全局快捷键（默认 <kbd>⌃`</kbd>，可自定义），终端从屏幕顶部滑出并自动连接常用服务器，用完再按一次收起。
+            Writing docs or watching a dashboard and need to run a couple of commands on a server? Press the global hotkey (default <kbd>⌃`</kbd>, customizable)
+            and a terminal slides down from the top of the screen, already connected. Press it again when you're done.
           </p>
           <figure class="shot shot-quick">
-            <img src="assets/quick.webp" width="2400" height="617" loading="lazy" alt="从屏幕顶部滑出的 Quick Terminal，显示服务状态" />
+            <img src="assets/quick.webp" width="2400" height="617" loading="lazy" alt="Quick Terminal sliding down from the top of the screen, showing service status" />
           </figure>
         </div>
       </section>
 
-      <!-- 主题 -->
+      <!-- Themes -->
       <section class="section feature reverse">
         <div class="container feature-inner">
           <div class="feature-text">
-            <span class="kicker">外观</span>
-            <h2>深色、浅色，都好看</h2>
+            <span class="kicker">Appearance</span>
+            <h2>Looks great in dark and light</h2>
             <ul class="checks">
-              <li>界面跟随系统自动切换深色 / 浅色</li>
-              <li>内置 14 套终端配色：One Dark、Dracula、Solarized、Gruvbox、Nord、Tokyo Night、Catppuccin……</li>
-              <li>背景透明度和毛玻璃效果可调；支持 Fira Code 等字体的连字</li>
-              <li>终端里还能直接显示图片（Sixel / iTerm2 图片协议）</li>
+              <li>Follows the system's dark / light mode automatically</li>
+              <li>14 built-in terminal color schemes: One Dark, Dracula, Solarized, Gruvbox, Nord, Tokyo Night, Catppuccin…</li>
+              <li>Adjustable background opacity and blur; ligatures for fonts like Fira Code</li>
+              <li>Show images right in the terminal (Sixel / iTerm2 image protocol)</li>
             </ul>
           </div>
           <figure class="shot">
             <div class="window">
               <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-              <img src="assets/light-splits.webp" width="2400" height="1500" loading="lazy" alt="浅色模式下的 SSHub" />
+              <img src="assets/light-splits.webp" width="2400" height="1500" loading="lazy" alt="SSHub in light mode" />
             </div>
           </figure>
         </div>
       </section>
 
-      <!-- 安全 -->
+      <!-- Security -->
       <section class="section section-alt" id="security">
         <div class="container">
-          <h2 class="section-title">在生产服务器上，多一分小心</h2>
-          <p class="section-lead">这些保护默认开启，不用额外设置。</p>
+          <h2 class="section-title">A little extra care on production servers</h2>
+          <p class="section-lead">These protections are on by default — nothing to configure.</p>
           <div class="security">
             <figure class="shot">
               <div class="window">
                 <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-                <img src="assets/paste-guard.webp" width="2400" height="1500" loading="lazy" alt="粘贴保护：粘贴三行包含 rm -rf 的命令前弹出确认框并预览内容" />
+                <img src="assets/paste-guard.webp" width="2400" height="1500" loading="lazy" alt="Paste protection: a confirmation dialog previews three pasted lines including rm -rf before anything runs" />
               </div>
             </figure>
             <div class="security-list">
               <div>
-                <h3>粘贴保护</h3>
-                <p>粘贴多行内容前先预览确认，还能「去掉末尾换行后粘贴」，避免一粘贴就执行。</p>
+                <h3>Paste protection</h3>
+                <p>Preview and confirm multi-line pastes, or paste without the trailing newline, so nothing runs the moment you paste.</p>
               </div>
               <div>
-                <h3>服务器指纹校验</h3>
-                <p>首次连接确认主机指纹；指纹变了会明确警告，防止中间人攻击。</p>
+                <h3>Host key verification</h3>
+                <p>Confirm the server's fingerprint on first connect and get a clear warning if it ever changes — no silent man-in-the-middle.</p>
               </div>
               <div>
-                <h3>密码存进钥匙串</h3>
-                <p>保存的密码和私钥口令用 macOS 钥匙串加密，只留在你的电脑上。</p>
+                <h3>Passwords in the Keychain</h3>
+                <p>Saved passwords and key passphrases are encrypted with the macOS Keychain and never leave your Mac.</p>
               </div>
               <div>
-                <h3>剪贴板只出不进</h3>
-                <p>服务器上 vim / tmux 复制的内容能同步到 Mac；但服务器读取你的剪贴板永远被拒绝。</p>
+                <h3>Clipboard goes one way</h3>
+                <p>Copies from vim / tmux on the server reach your Mac, but the server can never read your clipboard.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 更多 -->
+      <!-- More -->
       <section class="section">
         <div class="container">
-          <h2 class="section-title">还有很多细节</h2>
+          <h2 class="section-title">And plenty of details</h2>
           <div class="more">
-            <div><b>私钥 / Agent 登录</b><span>支持带口令的私钥、SSH Agent 和 ~/.ssh 默认密钥</span></div>
-            <div><b>快速连接</b><span>输入 <code>user@host</code> 或 <code>ftp://host</code> 回车即连，可顺手保存</span></div>
-            <div><b>断线重连</b><span>连接断开后，在终端里按 Enter 就能重新连接</span></div>
-            <div><b>长命令通知</b><span>命令跑超过 10 秒，结束时发 macOS 通知，点一下跳回去</span></div>
-            <div><b>保存终端输出</b><span><kbd>⌘⇧S</kbd> 一键把整个终端内容存成文本文件</span></div>
-            <div><b>选中即复制</b><span>可选开启，右键还能直接粘贴，老习惯不用改</span></div>
-            <div><b>GPU 加速</b><span><code>tail -f</code>、<code>top</code> 大量刷屏也流畅</span></div>
-            <div><b>新功能导览</b><span>升级后自动介绍新功能，每项都能一键试用</span></div>
-            <div><b>全中文界面</b><span>菜单、提示、错误信息都是中文，看得懂</span></div>
+            <div><b>Keys &amp; agent</b><span>Passphrase-protected keys, SSH agent and your default ~/.ssh keys</span></div>
+            <div><b>Quick connect</b><span>Type <code>user@host</code> or <code>ftp://host</code>, press Enter, and optionally save it</span></div>
+            <div><b>Reconnect</b><span>After a disconnect, press Enter in the terminal to reconnect</span></div>
+            <div><b>Long-command alerts</b><span>A macOS notification when a command that ran over 10 s finishes</span></div>
+            <div><b>Save output</b><span><kbd>⌘⇧S</kbd> saves the whole terminal buffer to a text file</span></div>
+            <div><b>Copy on select</b><span>Optional, with right-click to paste — keep your old habits</span></div>
+            <div><b>GPU acceleration</b><span>Smooth even with <code>tail -f</code> and <code>top</code> flooding the screen</span></div>
+            <div><b>What's New tour</b><span>New features are introduced after every update, each with a "try it" button</span></div>
+            <div><b>Encodings</b><span>UTF-8, GBK and Big5 for terminals, FTP file names and the editor</span></div>
           </div>
         </div>
       </section>
 
-      <!-- 安装 -->
+      <!-- Install -->
       <section class="section section-alt" id="install">
         <div class="container">
-          <h2 class="section-title">三步装好</h2>
+          <h2 class="section-title">Up and running in three steps</h2>
           <ol class="steps">
             <li>
               <span class="step-no">1</span>
               <div>
-                <h3>下载安装包</h3>
+                <h3>Download the installer</h3>
                 <p>
-                  Apple 芯片（M1 及以后）选 <a class="dl-link" data-arch="arm64" href="https://github.com/flight123-cloud/SSHub/releases/latest">arm64 版</a>，Intel 芯片选
-                  <a class="dl-link" data-arch="x64" href="https://github.com/flight123-cloud/SSHub/releases/latest">x64 版</a>。不确定？点屏幕左上角
-                  →「关于本机」看「芯片」一栏。
+                  Apple silicon (M1 and later): get the <a class="dl-link" data-arch="arm64" href="https://github.com/flight123-cloud/SSHub/releases/latest">arm64 build</a>; Intel:
+                  the <a class="dl-link" data-arch="x64" href="https://github.com/flight123-cloud/SSHub/releases/latest">x64 build</a>. Not sure? Click  → About This Mac
+                  and check "Chip".
                 </p>
               </div>
             </li>
             <li>
               <span class="step-no">2</span>
               <div>
-                <h3>拖进「应用程序」</h3>
-                <p>双击下载的 dmg，把 SSHub 拖到「应用程序」文件夹。</p>
+                <h3>Drag it to Applications</h3>
+                <p>Open the dmg and drag SSHub into your Applications folder.</p>
               </div>
             </li>
             <li>
               <span class="step-no">3</span>
               <div>
-                <h3>第一次打开时放行</h3>
+                <h3>Allow it on first launch</h3>
                 <p>
-                  SSHub 还没有经过 Apple 公证，第一次打开会提示「无法验证」。点「完成」后打开<b>系统设置 → 隐私与安全性</b>，在页面下方点<b>「仍要打开」</b>即可，只需要一次。
+                  SSHub isn't notarized by Apple yet, so the first launch says it can't be verified. Click "Done", open
+                  <b>System Settings → Privacy &amp; Security</b> and click <b>"Open Anyway"</b> near the bottom. You only need to do this once.
                 </p>
-                <p class="muted">如果提示「已损坏」，在「终端」里执行下面这条命令后再打开：</p>
+                <p class="muted">If macOS says the app "is damaged", run this in Terminal and open it again:</p>
                 <div class="code">
                   <code id="xattr-cmd">xattr -cr /Applications/SSHub.app</code>
-                  <button class="copy" type="button" data-copy="#xattr-cmd">复制</button>
+                  <button class="copy" type="button" data-copy="#xattr-cmd">Copy</button>
                 </div>
               </div>
             </li>
@@ -351,62 +366,67 @@
         </div>
       </section>
 
-      <!-- 常见问题 -->
+      <!-- FAQ -->
       <section class="section" id="faq">
         <div class="container narrow">
-          <h2 class="section-title">常见问题</h2>
+          <h2 class="section-title">FAQ</h2>
           <details>
-            <summary>SSHub 收费吗？</summary>
-            <p>完全免费，源代码在 GitHub 上公开（Apache-2.0 许可证）。</p>
+            <summary>Is SSHub free?</summary>
+            <p>Yes, completely. The source code is on GitHub under the Apache-2.0 license.</p>
           </details>
           <details>
-            <summary>支持 Windows 或 Linux 吗？</summary>
-            <p>目前只提供 macOS 版本，同时支持 Apple 芯片和 Intel 芯片的 Mac。</p>
-          </details>
-          <details>
-            <summary>我的服务器密码保存在哪里？安全吗？</summary>
+            <summary>Is the app available in English?</summary>
             <p>
-              会话信息保存在 <code>~/Library/Application Support/SSHub/</code>，其中密码和私钥口令用 macOS 钥匙串派生的密钥加密，只存在你自己的电脑上，不会上传到任何地方。
+              Not yet — the interface is currently in Simplified Chinese, while this website and the
+              <a href="https://github.com/flight123-cloud/SSHub#readme" rel="noopener">README</a> are available in English. An English interface is on the roadmap;
+              feel free to upvote it in <a href="https://github.com/flight123-cloud/SSHub/issues" rel="noopener">Issues</a>.
             </p>
           </details>
           <details>
-            <summary>为什么第一次打开提示「无法验证开发者」？</summary>
+            <summary>Does it run on Windows or Linux?</summary>
+            <p>Only macOS for now, on both Apple silicon and Intel Macs.</p>
+          </details>
+          <details>
+            <summary>Where are my server passwords stored? Is that safe?</summary>
             <p>
-              因为应用还没有经过 Apple 公证（需要付费的开发者账号）。按上面「第一次打开时放行」的步骤操作一次即可，之后正常使用。
+              Sessions live in <code>~/Library/Application Support/SSHub/</code>. Passwords and key passphrases are encrypted with a key derived from the macOS
+              Keychain, stay on your own Mac, and are never uploaded anywhere.
             </p>
           </details>
           <details>
-            <summary>服务器上的中文文件名 / 终端中文是乱码怎么办？</summary>
-            <p>在会话设置里把「编码」改成服务器使用的编码（老服务器通常是 GBK），终端和 FTP 文件名都会正确显示。</p>
+            <summary>Why does macOS say the developer can't be verified?</summary>
+            <p>The app isn't notarized by Apple yet (that needs a paid developer account). Follow "Allow it on first launch" above once and it opens normally from then on.</p>
           </details>
           <details>
-            <summary>怎么快速了解所有功能？</summary>
+            <summary>Chinese file names or terminal output look garbled — what now?</summary>
+            <p>Set the session's encoding to the one the server uses (older servers often use GBK); terminal output and FTP file names will then display correctly.</p>
+          </details>
+          <details>
+            <summary>How do I discover all the features?</summary>
             <p>
-              打开应用后点标题栏右上角的 ✦ 按钮查看「新功能介绍」，按 <kbd>⌘/</kbd> 查看全部快捷键，或者按 <kbd>⌘⇧P</kbd>
-              打开命令面板直接搜索想做的事。
+              Click the ✦ button in the app's top-right corner for the What's New tour, press <kbd>⌘/</kbd> for every keyboard shortcut, or press <kbd>⌘⇧P</kbd> and
+              search for what you want to do.
             </p>
           </details>
           <details>
-            <summary>遇到问题或者有新功能建议？</summary>
-            <p>
-              欢迎在 <a href="https://github.com/flight123-cloud/SSHub/issues" rel="noopener">GitHub Issues</a> 反馈。
-            </p>
+            <summary>Found a bug or have a feature request?</summary>
+            <p>Please open an issue on <a href="https://github.com/flight123-cloud/SSHub/issues" rel="noopener">GitHub Issues</a>.</p>
           </details>
         </div>
       </section>
 
-      <!-- 结尾下载 -->
+      <!-- Final CTA -->
       <section class="section final">
         <div class="container center">
           <img src="assets/icon.png" alt="" width="96" height="96" class="final-icon" />
-          <h2 class="section-title">现在就试试 SSHub</h2>
-          <p class="section-lead">免费下载，几分钟就能连上你的第一台服务器。</p>
+          <h2 class="section-title">Give SSHub a try</h2>
+          <p class="section-lead">Free to download — you'll be connected to your first server in minutes.</p>
           <div class="cta center-cta">
             <a class="btn btn-primary btn-large dl-link" data-arch="arm64" href="https://github.com/flight123-cloud/SSHub/releases/latest">
-              <span><b>下载 Apple 芯片版</b></span>
+              <span><b>Download for Apple silicon</b></span>
             </a>
             <a class="btn btn-ghost btn-large dl-link" data-arch="x64" href="https://github.com/flight123-cloud/SSHub/releases/latest">
-              <span><b>下载 Intel 版</b></span>
+              <span><b>Download for Intel</b></span>
             </a>
           </div>
         </div>
@@ -421,15 +441,16 @@
         </div>
         <div class="footer-links">
           <a href="https://github.com/flight123-cloud/SSHub" rel="noopener">GitHub</a>
-          <a href="https://github.com/flight123-cloud/SSHub/releases" rel="noopener">版本记录</a>
-          <a href="https://github.com/flight123-cloud/SSHub/issues" rel="noopener">问题反馈</a>
+          <a href="https://github.com/flight123-cloud/SSHub/releases" rel="noopener">Releases</a>
+          <a href="https://github.com/flight123-cloud/SSHub/issues" rel="noopener">Feedback</a>
           <a href="https://github.com/flight123-cloud/SSHub/blob/main/LICENSE" rel="noopener">Apache-2.0</a>
+          <a href="zh/" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a>
         </div>
       </div>
     </footer>
 
     <div class="lightbox" id="lightbox" hidden>
-      <button class="lightbox-close" type="button" aria-label="关闭">✕</button>
+      <button class="lightbox-close" type="button" aria-label="Close">✕</button>
       <img alt="" />
     </div>
 

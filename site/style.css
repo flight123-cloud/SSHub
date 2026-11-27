@@ -749,3 +749,32 @@ details p {
 .steps {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* ---------- 语言切换 ---------- */
+.lang-switch {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.lang-switch:hover {
+  color: var(--text);
+  text-decoration: none;
+  border-color: var(--text-3);
+}
+.ui-note {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-3);
+}
+@media (max-width: 640px) {
+  .lang-switch {
+    margin-left: auto;
+  }
+  .nav-inner .btn {
+    margin-left: 0;
+  }
+}

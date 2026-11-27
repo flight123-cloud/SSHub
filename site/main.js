@@ -3,6 +3,19 @@
   'use strict'
 
   var REPO = 'flight123-cloud/SSHub'
+  var ZH = (document.documentElement.lang || '').toLowerCase().indexOf('zh') === 0
+  var T = ZH
+    ? { latest: '最新版本 ', copy: '复制', copied: '已复制', mb: ' MB' }
+    : { latest: 'Latest version ', copy: 'Copy', copied: 'Copied', mb: ' MB' }
+
+  /* ---------- 记住访客选择的语言 ---------- */
+  document.querySelectorAll('[data-lang]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      try {
+        localStorage.setItem('sshub-lang', a.getAttribute('data-lang'))
+      } catch (e) {}
+    })
+  })
 
   /* ---------- 最新版本的下载链接 ---------- */
   function applyRelease(rel) {
@@ -17,13 +30,14 @@
       var asset = pick(el.getAttribute('data-arch'))
       if (asset) {
         el.href = asset.browser_download_url
-        el.title = asset.name + '（' + (asset.size / 1048576).toFixed(0) + ' MB）'
+        el.title = asset.name + ' (' + (asset.size / 1048576).toFixed(0) + T.mb + ')'
       }
     })
     var v = document.getElementById('version')
     if (v && rel.tag_name) {
       var date = rel.published_at ? new Date(rel.published_at) : null
-      v.textContent = '最新版本 ' + rel.tag_name + (date ? '（' + date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0') + '）' : '')
+      var d = date ? date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0') : ''
+      v.textContent = T.latest + rel.tag_name + (d ? (ZH ? '（' + d + '）' : ' (' + d + ')') : '')
     }
   }
 
@@ -71,10 +85,10 @@
       var src = document.querySelector(btn.getAttribute('data-copy'))
       if (!src || !navigator.clipboard) return
       navigator.clipboard.writeText(src.textContent.trim()).then(function () {
-        btn.textContent = '已复制'
+        btn.textContent = T.copied
         btn.classList.add('done')
         setTimeout(function () {
-          btn.textContent = '复制'
+          btn.textContent = T.copy
           btn.classList.remove('done')
         }, 1600)
       })
