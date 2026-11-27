@@ -136,21 +136,187 @@
     if (e.key === 'Escape' && !box.hidden) close()
   })
 
-  /* ---------- 滚动淡入 ---------- */
+  var REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  var HOVER = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+
+  /* ---------- 常见问题：平滑展开 / 收起，每个问题可直接链接 ---------- */
+  var faqs = Array.prototype.slice.call(document.querySelectorAll('#faq details'))
+  function setFaq(d, open, instant) {
+    var body = d.querySelector('.faq-body')
+    if (d._anim) {
+      var from = body.getBoundingClientRect().height
+      d._anim.cancel()
+      d._anim = null
+    }
+    d.classList.toggle('is-open', open)
+    if (REDUCE || instant || !body.animate) {
+      d.open = open
+      return
+    }
+    if (open) {
+      d.open = true
+      var to = body.scrollHeight
+      d._anim = body.animate(
+        [
+          { height: (from || 0) + 'px', opacity: from ? 1 : 0, transform: from ? 'none' : 'translateY(-6px)' },
+          { height: to + 'px', opacity: 1, transform: 'none' }
+        ],
+        { duration: 340, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+      )
+    } else {
+      var h = from || body.offsetHeight
+      d._anim = body.animate(
+        [
+          { height: h + 'px', opacity: 1 },
+          { height: '0px', opacity: 0 }
+        ],
+        { duration: 240, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' }
+      )
+    }
+    var anim = d._anim
+    anim.onfinish = function () {
+      if (d._anim !== anim) return
+      d._anim = null
+      if (!open) d.open = false
+    }
+  }
+  faqs.forEach(function (d, i) {
+    var s = d.querySelector('summary')
+    var body = document.createElement('div')
+    body.className = 'faq-body'
+    while (s.nextSibling) body.appendChild(s.nextSibling)
+    d.appendChild(body)
+    if (!d.id) d.id = 'faq-' + (i + 1)
+    if (d.open) d.classList.add('is-open')
+    s.addEventListener('click', function (e) {
+      e.preventDefault()
+      var open = !d.classList.contains('is-open')
+      setFaq(d, open)
+      if (open && history.replaceState) history.replaceState(null, '', '#' + d.id)
+    })
+  })
+  function openFromHash() {
+    var d = location.hash && document.getElementById(location.hash.slice(1))
+    if (d && faqs.indexOf(d) >= 0) {
+      setFaq(d, true, true)
+      d.scrollIntoView({ block: 'center' })
+    }
+  }
+  openFromHash()
+  window.addEventListener('hashchange', openFromHash)
+
+  /* ---------- 跟随鼠标的光晕边框 ---------- */
+  if (HOVER && !REDUCE) {
+    var glowGroups = document.querySelectorAll('.grid-6, #faq .container')
+    glowGroups.forEach(function (group) {
+      var items = group.querySelectorAll('.card, details')
+      items.forEach(function (el) {
+        el.classList.add('glow')
+      })
+      var raf = 0
+      var last = null
+      group.addEventListener('pointermove', function (e) {
+        last = e
+        if (raf) return
+        raf = requestAnimationFrame(function () {
+          raf = 0
+          items.forEach(function (el) {
+            var r = el.getBoundingClientRect()
+            el.style.setProperty('--mx', last.clientX - r.left + 'px')
+            el.style.setProperty('--my', last.clientY - r.top + 'px')
+          })
+        })
+      })
+      group.addEventListener('pointerenter', function () { group.classList.add('glow-on') })
+      group.addEventListener('pointerleave', function () { group.classList.remove('glow-on') })
+    })
+  }
+
+  /* ---------- 首屏截图：随滚动放平、随鼠标微倾 ---------- */
+  var heroWin = document.querySelector('.shot-hero .window')
+  var heroTilt = { rx: 4, ry: 0 }
+  function applyTilt() {
+    heroWin.style.setProperty('--rx', heroTilt.rx.toFixed(2) + 'deg')
+    heroWin.style.setProperty('--ry', heroTilt.ry.toFixed(2) + 'deg')
+  }
+
+  /* ---------- 导航：阅读进度条 + 当前区块高亮 ---------- */
+  var nav = document.querySelector('.nav')
+  var ticking = false
+  function onScroll() {
+    ticking = false
+    var max = document.documentElement.scrollHeight - innerHeight
+    nav.style.setProperty('--progress', max > 0 ? Math.min(1, scrollY / max).toFixed(4) : 0)
+    if (heroWin && !REDUCE) {
+      var r = heroWin.getBoundingClientRect()
+      // 截图顶部从视口底部移到视口 35% 处的过程中，倾斜从 4° 变为 0°
+      var t = Math.min(1, Math.max(0, (innerHeight - r.top) / (innerHeight * 0.65)))
+      heroTilt.rx = 4 * (1 - t)
+      applyTilt()
+    }
+  }
+  window.addEventListener('scroll', function () {
+    if (!ticking) {
+      ticking = true
+      requestAnimationFrame(onScroll)
+    }
+  }, { passive: true })
+  onScroll()
+
+  if (heroWin && HOVER && !REDUCE) {
+    var hero = document.querySelector('.hero')
+    hero.addEventListener('pointermove', function (e) {
+      var r = heroWin.getBoundingClientRect()
+      heroTilt.ry = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2))) * 2.5
+      applyTilt()
+    })
+    hero.addEventListener('pointerleave', function () {
+      heroTilt.ry = 0
+      applyTilt()
+    })
+  }
+
+  var links = {}
+  document.querySelectorAll('.nav-links a[href^="#"]').forEach(function (a) {
+    links[a.getAttribute('href').slice(1)] = a
+  })
   if ('IntersectionObserver' in window) {
-    var targets = document.querySelectorAll('.card, .feature-inner > *, .security > *, .more, .steps li, .shot-quick')
+    var spy = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (en) {
+          var a = links[en.target.id]
+          if (a) a.classList.toggle('active', en.isIntersecting)
+        })
+      },
+      { rootMargin: '-45% 0px -50% 0px' }
+    )
+    Object.keys(links).forEach(function (id) {
+      var sec = document.getElementById(id)
+      if (sec) spy.observe(sec)
+    })
+  }
+
+  /* ---------- 滚动淡入（同一组内依次出现） ---------- */
+  if ('IntersectionObserver' in window && !REDUCE) {
+    var targets = document.querySelectorAll('.card, .feature-inner > *, .security > *, .more, .steps li, .shot-quick, #faq details')
     var io = new IntersectionObserver(
       function (entries) {
         entries.forEach(function (en) {
           if (en.isIntersecting) {
-            en.target.classList.add('visible')
-            io.unobserve(en.target)
+            var el = en.target
+            el.classList.add('visible')
+            io.unobserve(el)
+            // 出现后清掉延迟，避免影响悬停动效
+            setTimeout(function () { el.style.transitionDelay = '' }, 900)
           }
         })
       },
       { rootMargin: '0px 0px -8% 0px' }
     )
     targets.forEach(function (t) {
+      var sibs = Array.prototype.filter.call(t.parentNode.children, function (c) { return c.tagName === t.tagName })
+      var i = sibs.indexOf(t)
+      if (i > 0) t.style.transitionDelay = Math.min(i, 6) * 70 + 'ms'
       t.classList.add('reveal')
       io.observe(t)
     })
