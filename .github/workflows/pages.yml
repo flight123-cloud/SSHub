@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  # deploy-pages 需要读取本次运行上传的网站产物
+  actions: read
   pages: write
   id-token: write
 
